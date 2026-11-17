@@ -67,7 +67,7 @@ object DayBuilder {
             s.place = found?.name ?: "Unknown place"
             s.placeSource = found?.source
             s.exact = found?.exact == true
-            if (places.missing("building", s.lat, s.lon)) missingBuildings += s.lat to s.lon
+            if (places.missing("spot", s.lat, s.lon)) missingBuildings += s.lat to s.lon
         }
         for (j in journeys) {
             j.fromPlace = endName(places, stays, j.fromTransfer, j.fromLat, j.fromLon, j.start, atStart = true, missingStreets)

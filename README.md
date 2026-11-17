@@ -26,9 +26,11 @@ from its positions, so midnight is a clean cut rather than state to roll
 over.
 
 Places are named by your own named places first, then OpenStreetMap: a
-building that contains the spot, or for where you parked, the street. Each
-spot is looked up once and the name kept; turn lookups off in Settings and
-the app never goes online for names.
+named building the spot is inside; otherwise the most likely named place
+within 150 m (a shop or cafe before an office, never a car park); otherwise
+the nearest address, "near 120 Main Street". Where you parked is named by
+the street. Each spot is looked up once and the name kept; turn lookups off
+in Settings and the app never goes online for names.
 
 **Screen time.** For each day: total time on screen, the number of unlocks,
 and every app you used with how long, longest first.

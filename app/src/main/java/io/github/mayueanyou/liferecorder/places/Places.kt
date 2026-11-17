@@ -14,7 +14,8 @@ import java.util.Locale
  * 1. places you named yourself -- exact, instant, offline, and the only
  *    source that knows which building you mean;
  * 2. OpenStreetMap: a named building that contains the point, else the
- *    nearest name within a short distance (marked approximate);
+ *    most likely named place within 150 m, else the nearest address --
+ *    all but the first marked approximate;
  * 3. for where you got out of a car and walked on, the street.
  *
  * Lookups are done once per spot and kept (see [Lookups]); everything here
@@ -28,7 +29,8 @@ class Places private constructor(private val own: List<PlaceRow>, private val lo
         own.filter { Geo.metres(lat, lon, it.latitude, it.longitude) <= it.radius }
             .minByOrNull { Geo.metres(lat, lon, it.latitude, it.longitude) }
 
-    fun building(lat: Double, lon: Double): LookupRow? = looked[key("building", lat, lon)]
+    /** What a spot was found to be called -- see [Lookups.spotName]. */
+    fun building(lat: Double, lon: Double): LookupRow? = looked[key("spot", lat, lon)]
     fun street(lat: Double, lon: Double): LookupRow? = looked[key("street", lat, lon)]
 
     fun stayName(lat: Double, lon: Double): Name? {
