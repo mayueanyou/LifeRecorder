@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.LifeRecorder" parent="android:Theme.Material.NoActionBar" />
+</resources>

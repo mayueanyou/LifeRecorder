@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A clock face inside a map pin: time, and place. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,28c-11.6,0 -21,9.4 -21,21c0,15.7 21,33 21,33s21,-17.3 21,-33c0,-11.6 -9.4,-21 -21,-21z" />
+    <path android:fillColor="#0EA5E9"
+        android:pathData="M54,36a13,13 0,1 0,0.01 0z" />
+    <path android:strokeColor="#FFFFFF" android:strokeWidth="3" android:strokeLineCap="round"
+        android:pathData="M54,41L54,49L60,53" />
+</vector>
