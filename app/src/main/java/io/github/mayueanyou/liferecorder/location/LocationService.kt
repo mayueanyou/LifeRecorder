@@ -18,6 +18,7 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import io.github.mayueanyou.liferecorder.Diagnostics
 import io.github.mayueanyou.liferecorder.R
 import io.github.mayueanyou.liferecorder.data.FixRow
 import io.github.mayueanyou.liferecorder.data.LifeDb
@@ -61,7 +62,10 @@ class LocationService : Service() {
                     provider = l.provider,
                 )
             }
-            scope.launch { rows.forEach { dao.insert(it) } }
+            scope.launch {
+                runCatching { rows.forEach { dao.insert(it) } }
+                    .onFailure { Diagnostics.note(this@LocationService, "recorder: could not save -- ${Diagnostics.trace(it)}") }
+            }
         }
     }
 
@@ -69,13 +73,23 @@ class LocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!Recording.hasForeground(this)) {
+            Diagnostics.note(this, "recorder: not started, location permission missing")
             stopSelf()
             return START_NOT_STICKY
         }
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-        ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), type)
+        try {
+            ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(), type)
+        } catch (e: Exception) {
+            // Android 14+ refuses a location service started from the
+            // background without "Allow all the time".
+            Diagnostics.note(this, "recorder: Android refused to start it -- ${e.javaClass.simpleName}: ${e.message}")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         startUpdates()
+        Diagnostics.note(this, "recorder: started")
         // Restarted by Android if it ever has to stop the service for memory.
         return START_STICKY
     }
@@ -90,6 +104,7 @@ class LocationService : Service() {
             client.removeLocationUpdates(callback)
             client.requestLocationUpdates(request, callback, Looper.getMainLooper())
         } catch (e: SecurityException) {
+            Diagnostics.note(this, "recorder: location updates refused -- ${e.message}")
             stopSelf()
         }
     }

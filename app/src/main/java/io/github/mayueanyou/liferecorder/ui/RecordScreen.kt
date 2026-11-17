@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -49,7 +50,12 @@ import io.github.mayueanyou.liferecorder.engine.DayBuilder
 import io.github.mayueanyou.liferecorder.engine.DayRecord
 import io.github.mayueanyou.liferecorder.engine.Entry
 import io.github.mayueanyou.liferecorder.engine.Mode
+import io.github.mayueanyou.liferecorder.data.LifeDb
+import io.github.mayueanyou.liferecorder.engine.Fix
+import io.github.mayueanyou.liferecorder.location.Recording
 import io.github.mayueanyou.liferecorder.places.Lookups
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -71,7 +77,7 @@ private val ORANGE = Color(0xFFF97316)
  * on the other.
  */
 @Composable
-fun RecordScreen() {
+fun RecordScreen(onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     var day by remember { mutableStateOf(LocalDate.now()) }
     var record by remember { mutableStateOf<DayRecord?>(null) }
@@ -79,6 +85,13 @@ fun RecordScreen() {
     var refresh by remember { mutableIntStateOf(0) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
+    // Somewhere to centre an empty day: the last place you were recorded at all.
+    var lastEver by remember { mutableStateOf<Fix?>(null) }
+    LaunchedEffect(refresh) {
+        lastEver = withContext(Dispatchers.IO) {
+            LifeDb.get(context).fixes().latest(1).firstOrNull()?.let { Fix(it.time, it.latitude, it.longitude, it.accuracy) }
+        }
+    }
 
     LaunchedEffect(day, refresh) {
         selected = null
@@ -102,14 +115,46 @@ fun RecordScreen() {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val mapHeight = maxHeight * 0.38f
             Column {
-                DayMap(
-                    entries = record?.entries.orEmpty(),
-                    selected = selected,
-                    here = if (day == LocalDate.now()) record?.lastFix else null,
-                    onSelect = { selected = it },
-                    modifier = Modifier.fillMaxWidth().height(mapHeight),
-                )
+                // Clipped: the map view draws past its own edges otherwise,
+                // over the date bar and the timeline.
+                Box(Modifier.fillMaxWidth().height(mapHeight).clipToBounds()) {
+                    DayMap(
+                        entries = record?.entries.orEmpty(),
+                        selected = selected,
+                        here = if (day == LocalDate.now()) record?.lastFix ?: lastEver else null,
+                        fallback = lastEver,
+                        onSelect = { selected = it },
+                        modifier = Modifier.fillMaxSize().clipToBounds(),
+                    )
+                    if (record != null && record!!.entries.isEmpty()) {
+                        EmptyDay(day, Recording.wanted(context), onOpenSettings)
+                    }
+                }
                 Timeline(record, day, selected) { i -> selected = if (selected == i) null else i }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyDay(day: LocalDate, recording: Boolean, onOpenSettings: () -> Unit) {
+    Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+        Card {
+            Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                when {
+                    !recording -> {
+                        Text("Recording is off", style = MaterialTheme.typography.titleMedium)
+                        Text("Turn on \"Record my location\" in Settings.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = onOpenSettings) { Text("Open Settings") }
+                    }
+                    day == LocalDate.now() -> {
+                        Text("Nothing recorded yet today", style = MaterialTheme.typography.titleMedium)
+                        Text("Stays appear after 8 minutes in one place; journeys as you travel.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                    }
+                    else -> Text("Nothing was recorded on this day.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }

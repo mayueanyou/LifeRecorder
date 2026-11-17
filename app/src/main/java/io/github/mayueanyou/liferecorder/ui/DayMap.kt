@@ -54,6 +54,7 @@ fun DayMap(
     entries: List<Entry>,
     selected: Int?,
     here: Fix?,
+    fallback: Fix?,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -69,7 +70,7 @@ fun DayMap(
     AndroidView(factory = { map }, modifier = modifier, update = { draw(it, context, entries, selected, here, onSelect) })
 
     // A new day is fitted to the screen once; selecting within it moves to the selection.
-    LaunchedEffect(entries) { fit(map, entries, here) }
+    LaunchedEffect(entries, fallback) { fit(map, entries, here ?: fallback) }
     LaunchedEffect(selected) { if (selected != null) focus(map, entries, selected) }
 }
 

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import io.github.mayueanyou.liferecorder.Diagnostics
 import io.github.mayueanyou.liferecorder.data.LifeDb
 import io.github.mayueanyou.liferecorder.data.PlaceRow
 import io.github.mayueanyou.liferecorder.location.Recording
@@ -173,6 +174,20 @@ fun SettingsScreen() {
             }
         }
         item {
+            Section("Diagnostics", "If something is wrong: a short report with no locations in it, to send to whoever helps you.") {
+                OutlinedButton(onClick = {
+                    scope.launch {
+                        val report = withContext(Dispatchers.IO) {
+                            diagnosticsReport(context, usage, foreground, background, notifications, unrestricted, recording)
+                        }
+                        context.startActivity(Intent.createChooser(
+                            Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, report),
+                            "Share diagnostics"))
+                    }
+                }) { Text("Share diagnostics") }
+            }
+        }
+        item {
             Text("Life Recorder · everything is kept on this phone.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
         }
@@ -235,6 +250,27 @@ private fun NameDialog(onDismiss: () -> Unit, onSave: (String, Double) -> Unit) 
         confirmButton = { TextButton(onClick = { onSave(name.trim(), radius) }, enabled = name.isNotBlank()) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
+}
+
+private suspend fun diagnosticsReport(
+    context: Context, usage: Boolean, foreground: Boolean, background: Boolean,
+    notifications: Boolean, unrestricted: Boolean, recording: Boolean,
+): String {
+    val db = LifeDb.get(context)
+    val start = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+    val fixes = db.fixes()
+    val last = fixes.latest(1).firstOrNull()
+    val info = context.packageManager.getPackageInfo(context.packageName, 0)
+    return buildString {
+        appendLine("Life Recorder ${info.versionName} (${info.longVersionCode}) on Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("permissions: usage=$usage location=$foreground always=$background notifications=$notifications battery-unrestricted=$unrestricted")
+        appendLine("recording on: $recording")
+        appendLine("positions today: ${fixes.countBetween(start, start + DAY_MILLIS)}, all: ${fixes.countBetween(0, Long.MAX_VALUE)}")
+        appendLine("last position at: ${last?.let { Instant.ofEpochMilli(it.time) } ?: "none"} accuracy ${last?.accuracy}")
+        appendLine("named places: ${db.places().places().size}, looked-up names: ${db.places().lookups().size}")
+        appendLine("--- log ---")
+        append(Diagnostics.read(context).takeLast(8000).ifEmpty { "(empty)" })
+    }
 }
 
 private fun batteryUnrestricted(context: Context): Boolean =

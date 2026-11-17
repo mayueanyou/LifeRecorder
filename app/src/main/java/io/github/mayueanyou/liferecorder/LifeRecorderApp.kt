@@ -8,6 +8,7 @@ import java.io.File
 class LifeRecorderApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        Diagnostics.install(this)
         SnapshotWorker.schedule(this)
         // OpenStreetMap asks every app for a name of its own, and map tiles
         // are cached in the app's own storage.

@@ -1,3 +1,5 @@
 <resources>
-    <style name="Theme.LifeRecorder" parent="android:Theme.Material.NoActionBar" />
+    <!-- Follows the phone: light here, dark in values-night. The window's own
+         colour shows behind the app while it starts, so it must match. -->
+    <style name="Theme.LifeRecorder" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>

@@ -80,10 +80,10 @@ private val Accent = Color(0xFF4F46E5)
 @Composable
 private fun Home() {
     var tab by remember { mutableStateOf(0) }
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(Modifier.weight(1f)) {
             when (tab) {
-                0 -> RecordScreen()
+                0 -> RecordScreen(onOpenSettings = { tab = 2 })
                 1 -> ScreenTimeScreen(onOpenSettings = { tab = 2 })
                 else -> SettingsScreen()
             }
