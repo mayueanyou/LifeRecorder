@@ -16,8 +16,8 @@ android {
         applicationId = "io.github.mayueanyou.liferecorder"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     // The release key lives outside the repository -- by default in
@@ -55,6 +55,12 @@ android {
     buildFeatures { compose = true }
 }
 
+// The database's exact shape, version by version, kept in the repo -- what
+// each upgrade has to arrive at, so a migration can be checked against it.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
@@ -69,5 +75,6 @@ dependencies {
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

@@ -27,6 +27,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -67,12 +69,32 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val scheme = if (isSystemInDarkTheme()) darkColorScheme(primary = Accent) else lightColorScheme(primary = Accent)
-            MaterialTheme(colorScheme = scheme) { ScreenTimeScreen() }
+            MaterialTheme(colorScheme = scheme) { Home() }
         }
     }
 }
 
 private val Accent = Color(0xFF4F46E5)
+
+/** Two tabs for now: what you did on the phone, and where you went. */
+@Composable
+private fun Home() {
+    var tab by remember { mutableStateOf(0) }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) {
+            when (tab) {
+                0 -> ScreenTimeScreen()
+                else -> LocationScreen()
+            }
+        }
+        NavigationBar {
+            NavigationBarItem(selected = tab == 0, onClick = { tab = 0 },
+                icon = { Text("⏱", fontSize = 20.sp) }, label = { Text("Screen time") })
+            NavigationBarItem(selected = tab == 1, onClick = { tab = 1 },
+                icon = { Text("📍", fontSize = 20.sp) }, label = { Text("Location") })
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

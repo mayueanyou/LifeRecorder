@@ -23,6 +23,17 @@ Android keeps this detail for about a week. Life Recorder saves each day as
 it goes (and every few hours in the background), so history lasts longer
 than that.
 
+**Location.** Turn on *Record my location* and the phone keeps a position
+every 10 m you move, at GPS accuracy, with nothing recorded while you are
+still. It runs in the background as a foreground service with a small
+ongoing notification (Android's requirement for background location), picks
+itself up again after a restart, and writes straight to the database on the
+phone, so no signal is ever needed. *Export today* saves the day's positions
+as JSON to share wherever you like.
+
+Next: turning those positions into stays and journeys, with a map and a
+timeline.
+
 ## Building
 
 Requirements: JDK 17 and the Android SDK (platform 35).
@@ -38,7 +49,10 @@ echo "sdk.dir=/path/to/Android/sdk" > local.properties
 | Permission | Why |
 |---|---|
 | Usage access (`PACKAGE_USAGE_STATS`) | Read which app was on screen, and when. Granted by you in Settings; never at install. |
-| Wake lock, run at startup, network state, foreground service | Added by Android's WorkManager library, which saves recent days in the background. None of them asks you for anything. |
+| Location, including "Allow all the time" | Record where you are while the app is closed. Asked for in steps, the way Android requires. |
+| Foreground service (location), notifications | The ongoing "Recording your day" notice that background location needs. |
+| Run at startup | Resume recording after the phone restarts, if it was on. |
+| Wake lock, network state | Added by Android's WorkManager library, which saves recent screen time in the background. |
 
 The app deliberately does **not** request `QUERY_ALL_PACKAGES`; app names
 and icons come from the apps that appear in your launcher.

@@ -9,6 +9,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.Transaction
 import androidx.room.Upsert
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /** One day's totals. Days are stored as ISO dates, "2026-11-17". */
 @Entity(tableName = "screen_day", primaryKeys = ["day"])
@@ -48,16 +50,30 @@ interface ScreenTimeDao {
  * Everything Life Recorder keeps, on the phone only. Screen time is the first
  * table; places, journeys and costs will join it here.
  */
-@Database(entities = [ScreenDayRow::class, ScreenAppRow::class], version = 1, exportSchema = false)
+@Database(entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class], version = 2, exportSchema = true)
 abstract class LifeDb : RoomDatabase() {
     abstract fun screenTime(): ScreenTimeDao
+    abstract fun fixes(): FixDao
 
     companion object {
         @Volatile private var instance: LifeDb? = null
 
         fun get(context: Context): LifeDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, LifeDb::class.java, "life.db")
+                .addMigrations(ADD_FIXES)
                 .build().also { instance = it }
+        }
+
+        /** 0.1 -> 0.2: positions join screen time; nothing already saved is touched. */
+        private val ADD_FIXES = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `fix` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`time` INTEGER NOT NULL, `latitude` REAL NOT NULL, `longitude` REAL NOT NULL, " +
+                        "`accuracy` REAL, `altitude` REAL, `speed` REAL, `bearing` REAL, `provider` TEXT)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_fix_time` ON `fix` (`time`)")
+            }
         }
     }
 }

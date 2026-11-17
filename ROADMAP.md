@@ -10,29 +10,30 @@ below.
 
 - **Screen time** — per day, per app, unlocks; history saved beyond Android's
   week.
+- **Location recording** — a foreground service (Android's "location" type,
+  with its ongoing notification) writing every fix to the phone's database;
+  10 m between fixes at GPS accuracy, nothing while still; resumes after a
+  reboot. No network needed to record.
 
 ## Next, in order
 
-1. **Location tracking** — a foreground service (Android's "location" type,
-   with its ongoing notification) that records fixes with a durable on-phone
-   queue. Doze-proof by design: no network is needed to record.
-2. **Stays and journeys** — the same rules the web app arrived at the hard
+1. **Stays and journeys** — the same rules the web app arrived at the hard
    way: a stay is anchored where it began and re-centred once; silence does
    not end it; imprecise fixes and jumps are ignored; a slow walk is a pause,
    not a stay; once a stay, always a stay; records split cleanly at midnight
    with no slivers; journeys cut into drive and walk by sustained vehicle
    runs, measured along the route.
-3. **Map and timeline** — OpenStreetMap tiles (no Google billing), routes
+2. **Map and timeline** — OpenStreetMap tiles (no Google billing), routes
    with direction arrows, one pin per place, a calendar-style day timeline.
-4. **Place names** — your own named places first, then OpenStreetMap
+3. **Place names** — your own named places first, then OpenStreetMap
    (buildings, streets for where you parked). No paid lookups.
-5. **Spending** — card notifications read with a notification listener the
+4. **Spending** — card notifications read with a notification listener the
    user enables, each charge matched to one stay; several cost items per
    event typed by hand.
-6. **Calendar** (optional) — write stays and journeys to a calendar on the
+5. **Calendar** (optional) — write stays and journeys to a calendar on the
    phone through Android's own calendar provider, so no Google sign-in is
    needed at all.
-7. **Export** — a day or a month as JSON or GPX.
+6. **Export** — a day or a month as JSON or GPX.
 
 ## Play Store checklist
 
