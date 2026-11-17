@@ -15,25 +15,24 @@ below.
   10 m between fixes at GPS accuracy, nothing while still; resumes after a
   reboot. No network needed to record.
 
+- **Stays and journeys** — the web app's rules, ported and checked against
+  it: on three real days, every one of 32 stays and journeys matched to the
+  minute, with the same mode and distance.
+- **Map and timeline** — OpenStreetMap, routes with direction arrows, one pin
+  per place, a calendar-style day; selecting one side selects the other.
+- **Place names** — your own places, then OpenStreetMap buildings and streets,
+  looked up once per spot and kept.
+
 ## Next, in order
 
-1. **Stays and journeys** — the same rules the web app arrived at the hard
-   way: a stay is anchored where it began and re-centred once; silence does
-   not end it; imprecise fixes and jumps are ignored; a slow walk is a pause,
-   not a stay; once a stay, always a stay; records split cleanly at midnight
-   with no slivers; journeys cut into drive and walk by sustained vehicle
-   runs, measured along the route.
-2. **Map and timeline** — OpenStreetMap tiles (no Google billing), routes
-   with direction arrows, one pin per place, a calendar-style day timeline.
-3. **Place names** — your own named places first, then OpenStreetMap
-   (buildings, streets for where you parked). No paid lookups.
-4. **Spending** — card notifications read with a notification listener the
+1. **Spending** — card notifications read with a notification listener the
    user enables, each charge matched to one stay; several cost items per
    event typed by hand.
-5. **Calendar** (optional) — write stays and journeys to a calendar on the
+2. **Calendar** (optional) — write stays and journeys to a calendar on the
    phone through Android's own calendar provider, so no Google sign-in is
    needed at all.
-6. **Export** — a day or a month as JSON or GPX.
+3. **Export** — a day or a month as JSON or GPX.
+4. **Month view** — totals over a month: time per place, distance, spending.
 
 ## Play Store checklist
 

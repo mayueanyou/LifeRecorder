@@ -76,29 +76,32 @@ class MainActivity : ComponentActivity() {
 
 private val Accent = Color(0xFF4F46E5)
 
-/** Two tabs for now: what you did on the phone, and where you went. */
+/** Record, Screen time, and Settings -- where everything that needs setting up lives. */
 @Composable
 private fun Home() {
     var tab by remember { mutableStateOf(0) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             when (tab) {
-                0 -> ScreenTimeScreen()
-                else -> LocationScreen()
+                0 -> RecordScreen()
+                1 -> ScreenTimeScreen(onOpenSettings = { tab = 2 })
+                else -> SettingsScreen()
             }
         }
         NavigationBar {
             NavigationBarItem(selected = tab == 0, onClick = { tab = 0 },
-                icon = { Text("⏱", fontSize = 20.sp) }, label = { Text("Screen time") })
+                icon = { Text("🗺", fontSize = 20.sp) }, label = { Text("Record") })
             NavigationBarItem(selected = tab == 1, onClick = { tab = 1 },
-                icon = { Text("📍", fontSize = 20.sp) }, label = { Text("Location") })
+                icon = { Text("⏱", fontSize = 20.sp) }, label = { Text("Screen time") })
+            NavigationBarItem(selected = tab == 2, onClick = { tab = 2 },
+                icon = { Text("⚙", fontSize = 20.sp) }, label = { Text("Settings") })
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScreenTimeScreen() {
+private fun ScreenTimeScreen(onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     val store = remember { ScreenTimeStore(context) }
     var hasAccess by remember { mutableStateOf(store.hasAccess()) }
@@ -118,9 +121,7 @@ private fun ScreenTimeScreen() {
     Scaffold(topBar = { TopAppBar(title = { Text("Life Recorder") }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
             if (!hasAccess) {
-                AccessCard {
-                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-                }
+                AccessCard(onOpenSettings)
                 return@Column
             }
             DayBar(day, onDay = { day = it })
@@ -140,19 +141,14 @@ private fun ScreenTimeScreen() {
 }
 
 @Composable
-private fun AccessCard(onOpen: () -> Unit) {
+private fun AccessCard(onOpenSettings: () -> Unit) {
     Card(Modifier.fillMaxWidth().padding(top = 24.dp)) {
         Column(Modifier.padding(20.dp)) {
             Text("See your screen time", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Life Recorder needs Usage access to read how long you use each app. " +
-                    "It stays on this phone: nothing is sent anywhere.\n\n" +
-                    "Tap below, find Life Recorder in the list, and turn on " +
-                    "\"Permit usage access\".",
-            )
+            Text("Turn on Usage access in Settings to see how long you use each app. It stays on this phone.")
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onOpen) { Text("Open Usage access settings") }
+            Button(onClick = onOpenSettings) { Text("Go to Settings") }
         }
     }
 }

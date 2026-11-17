@@ -19,6 +19,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Map tiles, and looking up place names on OpenStreetMap when allowed.
+         Positions themselves are never sent. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Names and icons for the apps you used. Launcher apps are enough;
          asking to see every package (QUERY_ALL_PACKAGES) is restricted on
          the Play Store and not needed for a screen-time list. -->

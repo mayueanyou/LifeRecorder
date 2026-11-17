@@ -50,17 +50,21 @@ interface ScreenTimeDao {
  * Everything Life Recorder keeps, on the phone only. Screen time is the first
  * table; places, journeys and costs will join it here.
  */
-@Database(entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class], version = 2, exportSchema = true)
+@Database(
+    entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class, PlaceRow::class, LookupRow::class],
+    version = 3, exportSchema = true,
+)
 abstract class LifeDb : RoomDatabase() {
     abstract fun screenTime(): ScreenTimeDao
     abstract fun fixes(): FixDao
+    abstract fun places(): PlaceDao
 
     companion object {
         @Volatile private var instance: LifeDb? = null
 
         fun get(context: Context): LifeDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, LifeDb::class.java, "life.db")
-                .addMigrations(ADD_FIXES)
+                .addMigrations(ADD_FIXES, ADD_PLACES)
                 .build().also { instance = it }
         }
 
@@ -73,6 +77,20 @@ abstract class LifeDb : RoomDatabase() {
                         "`accuracy` REAL, `altitude` REAL, `speed` REAL, `bearing` REAL, `provider` TEXT)",
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_fix_time` ON `fix` (`time`)")
+            }
+        }
+
+        /** 0.2 -> 0.3: your named places, and names looked up for spots. */
+        private val ADD_PLACES = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `place` (`name` TEXT NOT NULL, `latitude` REAL NOT NULL, " +
+                        "`longitude` REAL NOT NULL, `radius` REAL NOT NULL, PRIMARY KEY(`name`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `lookup` (`key` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                        "`name` TEXT, `exact` INTEGER NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`key`))",
+                )
             }
         }
     }
