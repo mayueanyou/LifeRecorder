@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,8 +20,29 @@ android {
         versionName = "0.1.0"
     }
 
+    // The release key lives outside the repository -- by default in
+    // ~/.config/liferecorder/keystore.properties, or wherever
+    // LIFERECORDER_KEYSTORE points. Without it, release builds are unsigned.
+    val keyProps = Properties().apply {
+        val path = System.getenv("LIFERECORDER_KEYSTORE")
+            ?: "${System.getProperty("user.home")}/.config/liferecorder/keystore.properties"
+        val file = File(path)
+        if (file.exists()) file.inputStream().use { load(it) }
+    }
+    signingConfigs {
+        if (keyProps.getProperty("storeFile") != null) {
+            create("release") {
+                storeFile = File(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
