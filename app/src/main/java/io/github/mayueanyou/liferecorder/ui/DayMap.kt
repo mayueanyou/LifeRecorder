@@ -55,6 +55,8 @@ fun DayMap(
     selected: Int?,
     here: Fix?,
     fallback: Fix?,
+    centreOn: Fix?,
+    centreRequest: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -72,6 +74,10 @@ fun DayMap(
     // A new day is fitted to the screen once; selecting within it moves to the selection.
     LaunchedEffect(entries, fallback) { fit(map, entries, here ?: fallback) }
     LaunchedEffect(selected) { if (selected != null) focus(map, entries, selected) }
+    LaunchedEffect(centreRequest) {
+        val at = centreOn ?: return@LaunchedEffect
+        map.controller.animateTo(GeoPoint(at.lat, at.lon), max(map.zoomLevelDouble, 16.0), 400L)
+    }
 }
 
 private class Spot(val indices: MutableList<Int>, val name: String?, val lat: Double, val lon: Double)

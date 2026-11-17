@@ -54,6 +54,14 @@ import io.github.mayueanyou.liferecorder.data.LifeDb
 import io.github.mayueanyou.liferecorder.engine.Fix
 import io.github.mayueanyou.liferecorder.location.Recording
 import io.github.mayueanyou.liferecorder.places.Lookups
+import android.widget.Toast
+import androidx.compose.runtime.rememberCoroutineScope
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.coroutines.resume
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import kotlinx.coroutines.Dispatchers
@@ -85,6 +93,10 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
     var refresh by remember { mutableIntStateOf(0) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
+    val scope = rememberCoroutineScope()
+    // The "where am I" button: a fresh position, centred on the map.
+    var located by remember { mutableStateOf<Fix?>(null) }
+    var locateRequest by remember { mutableIntStateOf(0) }
     // Somewhere to centre an empty day: the last place you were recorded at all.
     var lastEver by remember { mutableStateOf<Fix?>(null) }
     LaunchedEffect(refresh) {
@@ -111,7 +123,17 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        DayHeader(day, record) { day = it }
+        DayHeader(day, record, onDay = { day = it }, onLocate = {
+            scope.launch {
+                val fix = currentPosition(context) ?: lastEver
+                if (fix == null) {
+                    Toast.makeText(context, "No position yet — allow location in Settings", Toast.LENGTH_SHORT).show()
+                } else {
+                    located = fix
+                    locateRequest++
+                }
+            }
+        })
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val mapHeight = maxHeight * 0.38f
             Column {
@@ -121,8 +143,10 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
                     DayMap(
                         entries = record?.entries.orEmpty(),
                         selected = selected,
-                        here = if (day == LocalDate.now()) record?.lastFix ?: lastEver else null,
+                        here = if (day == LocalDate.now()) located ?: record?.lastFix ?: lastEver else null,
                         fallback = lastEver,
+                        centreOn = located,
+                        centreRequest = locateRequest,
                         onSelect = { selected = it },
                         modifier = Modifier.fillMaxSize().clipToBounds(),
                     )
@@ -161,7 +185,7 @@ private fun EmptyDay(day: LocalDate, recording: Boolean, onOpenSettings: () -> U
 }
 
 @Composable
-private fun DayHeader(day: LocalDate, record: DayRecord?, onDay: (LocalDate) -> Unit) {
+private fun DayHeader(day: LocalDate, record: DayRecord?, onDay: (LocalDate) -> Unit, onLocate: () -> Unit) {
     val today = LocalDate.now()
     val name = when (day) {
         today -> "Today"
@@ -173,6 +197,7 @@ private fun DayHeader(day: LocalDate, record: DayRecord?, onDay: (LocalDate) -> 
         TextButton(onClick = { onDay(day.minusDays(1)) }) { Text("‹", fontSize = 22.sp) }
         Text(name, style = MaterialTheme.typography.titleMedium)
         TextButton(onClick = { onDay(day.plusDays(1)) }, enabled = day < today) { Text("›", fontSize = 22.sp) }
+        TextButton(onClick = onLocate) { Text("◎", fontSize = 22.sp) }
         Spacer(Modifier.weight(1f))
         Text(if (record == null) "" else "$places place${if (places == 1) "" else "s"}",
             color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 12.dp))
@@ -203,7 +228,11 @@ private fun Timeline(record: DayRecord?, day: LocalDate, selected: Int?, onTap: 
     }
     val scroll = rememberScrollState()
     val density = LocalDensity.current
-    LaunchedEffect(entries.isNotEmpty(), day) {
+    // Only once the day shown is the day asked for -- just after switching
+    // day, the previous day's entries are still on screen, and scrolling to
+    // them put a new day at the wrong hour.
+    LaunchedEffect(record?.day, entries.isNotEmpty()) {
+        if (record?.day != day) return@LaunchedEffect
         // Today opens around now; another day at its first entry after the night.
         val now = System.currentTimeMillis()
         val minute = if (day == LocalDate.now()) minuteOf(now) - 180
@@ -219,7 +248,7 @@ private fun Timeline(record: DayRecord?, day: LocalDate, selected: Int?, onTap: 
         val total = maxOf(HOUR * 24, blocks.lastOrNull()?.let { it.top + it.height } ?: 0.dp)
         Box(Modifier.fillMaxWidth().height(total)) {
             for (h in 0..24) {
-                Box(Modifier.offset(x = AXIS, y = HOUR * h).fillMaxWidth().height(1.dp)
+                Box(Modifier.offset(y = HOUR * h).padding(start = AXIS).fillMaxWidth().height(1.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = .5f)))
                 Text(hourName(h), Modifier.offset(y = HOUR * h - 7.dp).width(AXIS - 8.dp),
                     textAlign = TextAlign.End, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -227,8 +256,8 @@ private fun Timeline(record: DayRecord?, day: LocalDate, selected: Int?, onTap: 
             if (day == LocalDate.now()) {
                 Box(Modifier.offset(x = AXIS - 6.dp, y = perMinute * minuteOf(System.currentTimeMillis()).toFloat() - 4.dp)
                     .size(8.dp).clip(CircleShape).background(Color(0xFFEF4444)))
-                Box(Modifier.offset(x = AXIS - 2.dp, y = perMinute * minuteOf(System.currentTimeMillis()).toFloat() - 1.dp)
-                    .fillMaxWidth().height(2.dp).background(Color(0xFFEF4444)))
+                Box(Modifier.offset(y = perMinute * minuteOf(System.currentTimeMillis()).toFloat() - 1.dp)
+                    .padding(start = AXIS - 2.dp).fillMaxWidth().height(2.dp).background(Color(0xFFEF4444)))
             }
             var stayNo = 0
             blocks.forEach { b ->
@@ -249,8 +278,10 @@ private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean,
         is Entry.JourneyEntry -> Color(modeColour(entry.journey.mode)) to Color(0xFF0EA5E9).copy(alpha = .10f)
     }
     Box(
-        Modifier.offset(x = AXIS + 4.dp, y = block.top)
-            .padding(end = 12.dp)
+        // Inset rather than shifted: shifting kept the full width and pushed
+        // the right edge -- and the duration -- off the screen.
+        Modifier.offset(y = block.top)
+            .padding(start = AXIS + 4.dp, end = 12.dp)
             .fillMaxWidth()
             .height(block.height - 1.dp)
             .clip(RoundedCornerShape(7.dp))
@@ -324,4 +355,25 @@ fun spellMinutes(minutes: Long): String = when {
     minutes < 60 -> "${minutes}m"
     minutes % 60 == 0L -> "${minutes / 60}h"
     else -> "${minutes / 60}h ${minutes % 60}m"
+}
+
+/**
+ * Where the phone is right now: a fresh reading if one comes within a few
+ * seconds, otherwise the last one Android has. Null without permission.
+ */
+@android.annotation.SuppressLint("MissingPermission")
+private suspend fun currentPosition(context: android.content.Context): Fix? {
+    if (!Recording.hasForeground(context)) return null
+    val client = LocationServices.getFusedLocationProviderClient(context)
+    val fresh = withTimeoutOrNull(6_000) {
+        suspendCancellableCoroutine<android.location.Location?> { cont ->
+            client.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                .addOnSuccessListener { cont.resume(it) }
+                .addOnFailureListener { cont.resume(null) }
+        }
+    }
+    val location = fresh ?: suspendCancellableCoroutine<android.location.Location?> { cont ->
+        client.lastLocation.addOnSuccessListener { cont.resume(it) }.addOnFailureListener { cont.resume(null) }
+    }
+    return location?.let { Fix(it.time, it.latitude, it.longitude, if (it.hasAccuracy()) it.accuracy else null) }
 }

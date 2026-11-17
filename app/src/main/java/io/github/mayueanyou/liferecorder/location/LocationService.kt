@@ -142,8 +142,11 @@ class LocationService : Service() {
         private const val CHANNEL = "recording"
         private const val NOTIFICATION_ID = 1
         private const val MIN_DISTANCE_M = 10f
-        private const val INTERVAL_MILLIS = 10_000L
-        private const val FASTEST_MILLIS = 2_000L
+        // As often as every second while moving -- the 10 m minimum is what
+        // keeps a still phone quiet. A 10-second interval left a car at city
+        // speed with one position every ~170 m, far coarser than the NUC's feed.
+        private const val INTERVAL_MILLIS = 2_000L
+        private const val FASTEST_MILLIS = 1_000L
 
         fun intent(context: Context) = Intent(context, LocationService::class.java)
     }
