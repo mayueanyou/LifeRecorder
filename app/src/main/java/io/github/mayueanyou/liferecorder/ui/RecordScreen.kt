@@ -449,7 +449,7 @@ internal fun timeOfDay(t: Long) = CLOCK.format(Instant.ofEpochMilli(t))
 private fun details(e: Entry): String {
     val span = "${timeOfDay(e.start)} – ${timeOfDay(e.end)}"
     return when (e) {
-        is Entry.StayEntry -> span + if (!e.stay.exact && e.stay.placeSource == "osm") " · approximate" else ""
+        is Entry.StayEntry -> span
         is Entry.JourneyEntry -> {
             val j = e.journey
             if (j.mode == Mode.MOVING) span else "$span · ${miles(j.distanceM)} · avg ${mph(j.avgKmh)}"
