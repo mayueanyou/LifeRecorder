@@ -78,7 +78,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val HOUR: Dp = 96.dp          // the timeline's scale: an hour is this tall
+// The timeline's scale: an hour is this tall -- enough that five minutes on one app has room for its icon.
+private val HOUR: Dp = 180.dp
 private val MIN_BLOCK: Dp = 26.dp     // the least an entry is drawn at, however brief
 private val AXIS: Dp = 52.dp
 private val ORANGE = Color(0xFFF97316)
@@ -363,7 +364,7 @@ private fun EventBlock(
                     val tall = maxOf(1.5.dp, h * ((s.end - s.start) / span))
                     Box(Modifier.offset(y = top).height(tall).fillMaxWidth().background(PHONE.copy(alpha = .85f)),
                         contentAlignment = Alignment.Center) {
-                        if (tall >= ICON + 2.dp) appIcon(s.packageName)?.let {
+                        if (s.millis >= ICON_AFTER_MS) appIcon(s.packageName)?.let {
                             Image(it, contentDescription = s.label, modifier = Modifier.size(ICON).clip(RoundedCornerShape(4.dp)))
                         }
                     }
@@ -411,7 +412,8 @@ private fun EventBlock(
 
 private val PHONE = Color(0xFFF59E0B)
 private val PHONE_BAR = 20.dp    // wide enough for an app's icon
-private val ICON = 16.dp
+private val ICON = 14.dp
+private const val ICON_AFTER_MS = 5 * 60_000L   // five minutes or more on one app shows its icon
 private val PHONE_TEXT = Color(0xFFB45309)
 
 /** Per app, its time during an entry, longest first. */
