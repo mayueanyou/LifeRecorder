@@ -38,6 +38,8 @@ interface FixDao {
     @Query("SELECT COUNT(*) FROM fix WHERE time = :time")
     suspend fun countAt(time: Long): Int
 
+    @Query("SELECT MIN(time) FROM fix") suspend fun firstTime(): Long?
+
     @Query("SELECT * FROM fix ORDER BY time DESC LIMIT :limit")
     suspend fun latest(limit: Int): List<FixRow>
 }

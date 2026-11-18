@@ -11,6 +11,9 @@ class LifeRecorderApp : Application() {
         Diagnostics.install(this)
         SnapshotWorker.schedule(this)
         io.github.mayueanyou.liferecorder.location.Watchdog.schedule(this)
+        if (io.github.mayueanyou.liferecorder.backup.GoogleAccount.signedIn(this)) {
+            io.github.mayueanyou.liferecorder.backup.BackupWorker.schedule(this)
+        }
         // OpenStreetMap asks every app for a name of its own, and map tiles
         // are cached in the app's own storage.
         Configuration.getInstance().apply {

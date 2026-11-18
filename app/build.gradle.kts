@@ -16,8 +16,8 @@ android {
         applicationId = "io.github.mayueanyou.liferecorder"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.4.2"
+        versionCode = 12
+        versionName = "0.5.0"
     }
 
     // The release key lives outside the repository -- by default in
@@ -76,6 +76,8 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("com.google.android.gms:play-services-location:21.3.0")
+    // Drive backup: asks the user for access to the files this app creates, nothing more.
+    implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation("org.osmdroid:osmdroid-android:6.1.20")
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")

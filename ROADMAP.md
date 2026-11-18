@@ -23,14 +23,15 @@ below.
 - **Place names** — your own places, then OpenStreetMap buildings and streets,
   looked up once per spot and kept.
 
+- **Drive backup** — each day as JSON to your own Google Drive, nightly, with
+  restore; only the drive.file permission.
 - **Spending** — card notifications read with a notification listener,
   each charge matched to one stay; several typed items per event; "No cost";
   month and day totals and a month calendar.
 
 ## Next, in order
 
-1. **Drive backup** — each day as JSON to your own Google Drive.
-2. **Calendar** (optional) — write stays and journeys to a calendar on the
+1. **Calendar** (optional) — write stays and journeys to a calendar on the
    phone through Android's own calendar provider, so no Google sign-in is
    needed at all.
 3. **Export** — a day or a month as JSON or GPX.

@@ -44,6 +44,14 @@ that sent a purchase is listed in Settings, off until you turn it on (a
 wallet app would count each purchase twice). Tap the day's name for the
 month, with what each day cost.
 
+**Backup.** Sign in with Google in Settings and each night your days go to
+your own Google Drive — *My Drive › Life Recorder › 2026-11 › 2026-11-17.json*
+— as plain JSON: the day's positions, stays and journeys, purchases, typed
+costs and screen time, plus your named places. Only the `drive.file`
+permission is asked for, so the app can see the files it made and nothing
+else in your Drive. Back up now, Restore (adds what the phone lacks, never
+replaces) and Sign out are in Settings.
+
 **Screen time.** For each day: total time on screen, the number of unlocks,
 and every app you used with how long, longest first.
 
@@ -55,8 +63,9 @@ day as it goes, so history lasts longer.
 **Settings.** Every permission, one step at a time; recording on and off;
 which apps count as money; export of the day's positions; your named places.
 
-Everything stays on the phone. The only things that go online are map tiles
-and, if allowed, the name of a spot.
+Everything stays on the phone. The only things that go online are map tiles,
+if allowed the name of a spot, and, if you sign in, your backup to your own Drive.
+[Privacy policy](https://mayueanyou.github.io/LifeRecorder/privacy.html).
 
 ## Building
 

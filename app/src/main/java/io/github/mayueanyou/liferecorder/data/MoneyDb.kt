@@ -65,6 +65,13 @@ interface MoneyDao {
 
     @Query("DELETE FROM cost_item WHERE id = :id") suspend fun deleteItem(id: Long)
 
+    @Query("SELECT MIN(time) FROM payment") suspend fun firstPayment(): Long?
+    @Query("SELECT MIN(at) FROM cost_item") suspend fun firstItem(): Long?
+
+    /** An item already here -- restoring the same backup twice adds nothing. */
+    @Query("SELECT COUNT(*) FROM cost_item WHERE at = :at AND amount = :amount AND cleared = :cleared AND IFNULL(what, '') = IFNULL(:what, '')")
+    suspend fun countItem(at: Long, amount: Double, what: String?, cleared: Boolean): Int
+
     @Query("DELETE FROM cost_item WHERE at >= :from AND at <= :until AND cleared = 1")
     suspend fun deleteCleared(from: Long, until: Long)
 }

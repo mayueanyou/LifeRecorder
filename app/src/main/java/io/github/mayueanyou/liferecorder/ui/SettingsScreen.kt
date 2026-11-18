@@ -50,6 +50,13 @@ import io.github.mayueanyou.liferecorder.data.PlaceRow
 import io.github.mayueanyou.liferecorder.location.Recording
 import io.github.mayueanyou.liferecorder.data.MoneyApp
 import io.github.mayueanyou.liferecorder.money.MoneyApps
+import io.github.mayueanyou.liferecorder.backup.Backup
+import io.github.mayueanyou.liferecorder.backup.BackupWorker
+import io.github.mayueanyou.liferecorder.backup.Drive
+import io.github.mayueanyou.liferecorder.backup.GoogleAccount
+import android.app.Activity
+import android.widget.Toast
+import androidx.activity.result.IntentSenderRequest
 import androidx.compose.ui.unit.sp
 import io.github.mayueanyou.liferecorder.places.Lookups
 import io.github.mayueanyou.liferecorder.screentime.UsageReader
@@ -87,6 +94,91 @@ fun SettingsScreen() {
     val notifications = remember(checks) { Recording.hasNotifications(context) }
     val unrestricted = remember(checks) { batteryUnrestricted(context) }
     val reading = remember(checks) { MoneyApps.hasAccess(context) }
+
+    // Google account: sign in, back up, restore, sign out. Each needs a token,
+    // which may first need Google's own screen (choose an account, allow).
+    var email by remember { mutableStateOf(GoogleAccount.email(context)) }
+    var busy by remember { mutableStateOf<String?>(null) }
+    var backupVersion by remember { mutableIntStateOf(0) }
+    val backupStatus = remember(backupVersion, checks) { Backup.status(context) }
+    var pendingAction by remember { mutableStateOf<String?>(null) }
+    var confirmRestore by remember { mutableStateOf(false) }
+    val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
+
+    suspend fun perform(action: String, token: String) {
+        try {
+            when (action) {
+                "signin" -> {
+                    busy = "Signing in…"
+                    val who = withContext(Dispatchers.IO) { Drive(token).email() }
+                    GoogleAccount.remember(context, who)
+                    email = who
+                    BackupWorker.schedule(context)
+                    busy = "Backing up…"
+                    val n = withContext(Dispatchers.IO) { Backup.run(context, token) { busy = it } }
+                    toast("Signed in. Backed up $n day${if (n == 1) "" else "s"}.")
+                }
+                "backup" -> {
+                    busy = "Backing up…"
+                    val n = withContext(Dispatchers.IO) { Backup.run(context, token) { busy = it } }
+                    toast(if (n == 0) "Already up to date." else "Backed up $n day${if (n == 1) "" else "s"}.")
+                }
+                "restore" -> {
+                    busy = "Restoring…"
+                    val n = withContext(Dispatchers.IO) { Backup.restore(context, token) { busy = it } }
+                    toast(if (n == 0) "Nothing to restore — this phone already has it all." else "Restored $n record${if (n == 1) "" else "s"}.")
+                }
+                "signout" -> {
+                    withContext(Dispatchers.IO) { Backup.signOut(context, token) }
+                    BackupWorker.cancel(context)
+                    email = null
+                    toast("Signed out. Your files stay in your Drive.")
+                }
+            }
+        } catch (e: Exception) {
+            toast("Google Drive: ${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            busy = null
+            backupVersion++
+        }
+    }
+
+    val googleScreen = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        val action = pendingAction ?: return@rememberLauncherForActivityResult
+        pendingAction = null
+        val token = if (result.resultCode == Activity.RESULT_OK)
+            runCatching { GoogleAccount.fromScreen(context, result.data) }.getOrNull() else null
+        if (token == null) {
+            busy = null
+            if (action != "signout") toast("Sign-in was cancelled.")
+            else scope.launch { withContext(Dispatchers.IO) { Backup.signOut(context, null) }; BackupWorker.cancel(context); email = null }
+            return@rememberLauncherForActivityResult
+        }
+        scope.launch { perform(action, token) }
+    }
+
+    fun withGoogle(action: String) {
+        scope.launch {
+            busy = "Connecting to Google…"
+            val answer = try {
+                withContext(Dispatchers.IO) { GoogleAccount.authorize(context) }
+            } catch (e: Exception) {
+                busy = null
+                if (action == "signout") {
+                    withContext(Dispatchers.IO) { Backup.signOut(context, null) }
+                    BackupWorker.cancel(context); email = null
+                } else toast("Could not reach Google: ${e.message ?: e.javaClass.simpleName}")
+                return@launch
+            }
+            when (answer) {
+                is GoogleAccount.Answer.Token -> perform(action, answer.token)
+                is GoogleAccount.Answer.NeedsScreen -> {
+                    pendingAction = action
+                    googleScreen.launch(IntentSenderRequest.Builder(answer.intent.intentSender).build())
+                }
+            }
+        }
+    }
     var moneyVersion by remember { mutableIntStateOf(0) }
     val moneyApps by produceState(emptyList<MoneyApp>(), checks, moneyVersion) {
         value = withContext(Dispatchers.IO) { LifeDb.get(context).money().apps() }
@@ -140,6 +232,33 @@ fun SettingsScreen() {
                         context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                     }) { Text("Open App info") }
                 }
+            }
+        }
+        item {
+            Section("Google account", "Back up your days to your own Google Drive, as plain files you can open anywhere. " +
+                "Life Recorder can see only the files it makes there — nothing else in your Drive.") {
+                val who = email
+                if (who == null) {
+                    Button(onClick = { withGoogle("signin") }, enabled = busy == null) { Text("Sign in with Google") }
+                } else {
+                    Text("Signed in as $who", style = MaterialTheme.typography.titleSmall)
+                    Text("Backs up each night to My Drive › Life Recorder.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    backupStatus?.let { st ->
+                        val ago = (System.currentTimeMillis() - st.at) / 60_000
+                        Text(
+                            if (st.error != null) "⚠ Last backup failed: ${st.error}"
+                            else "Last backup ${if (ago < 1) "just now" else spellMinutes(ago) + " ago"} · ${st.days} day${if (st.days == 1) "" else "s"} written",
+                            color = if (st.error != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { withGoogle("backup") }, enabled = busy == null) { Text("Back up now") }
+                        OutlinedButton(onClick = { confirmRestore = true }, enabled = busy == null) { Text("Restore") }
+                    }
+                    TextButton(onClick = { withGoogle("signout") }, enabled = busy == null) { Text("Sign out") }
+                }
+                busy?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             }
         }
         item {
@@ -246,6 +365,14 @@ fun SettingsScreen() {
         }
     }
 
+    if (confirmRestore) AlertDialog(
+        onDismissRequest = { confirmRestore = false },
+        title = { Text("Restore from Google Drive?") },
+        text = { Text("Adds whatever is in your backup and missing from this phone. Nothing here is replaced or removed.") },
+        confirmButton = { TextButton(onClick = { confirmRestore = false; withGoogle("restore") }) { Text("Restore") } },
+        dismissButton = { TextButton(onClick = { confirmRestore = false }) { Text("Cancel") } },
+    )
+
     if (naming) NameDialog(onDismiss = { naming = false }) { name, radius ->
         scope.launch {
             withContext(Dispatchers.IO) {
@@ -318,6 +445,8 @@ private suspend fun diagnosticsReport(
         appendLine("Life Recorder ${info.versionName} (${info.longVersionCode}) on Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("permissions: usage=$usage location=$foreground always=$background notifications=$notifications battery-unrestricted=$unrestricted")
         appendLine("recording on: $recording")
+        appendLine("google account: ${if (GoogleAccount.signedIn(context)) "signed in" else "no"}; last backup: " +
+            (Backup.status(context)?.let { "${Instant.ofEpochMilli(it.at)} days=${it.days}" + (it.error?.let { e -> " error=$e" } ?: "") } ?: "never"))
         appendLine("notification access: $reading; purchases read: " +
             db.money().apps().joinToString { "${it.app}=${it.count}" + if (MoneyApps.counts(context, it.pkg)) "" else " (off)" }.ifEmpty { "none" })
         appendLine("positions today: ${fixes.countBetween(start, start + DAY_MILLIS)}, all: ${fixes.countBetween(0, Long.MAX_VALUE)}")

@@ -28,6 +28,8 @@ interface ScreenTimeDao {
     @Query("SELECT * FROM screen_app WHERE day = :day ORDER BY millis DESC")
     suspend fun apps(day: String): List<ScreenAppRow>
 
+    @Query("SELECT MIN(day) FROM screen_day") suspend fun firstDay(): String?
+
     @Query("SELECT * FROM screen_day ORDER BY day DESC LIMIT :limit")
     suspend fun recentDays(limit: Int): List<ScreenDayRow>
 
