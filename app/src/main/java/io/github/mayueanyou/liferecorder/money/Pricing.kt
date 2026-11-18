@@ -10,6 +10,8 @@ data class Charge(
     val payment: PaymentRow,
     val outsideByMin: Int = 0,
     val sameAsItem: Boolean = false,
+    /** Other apps that reported the same purchase; counted once. */
+    val alsoFrom: List<String> = emptyList(),
 )
 
 /** What one stay or journey cost: typed items plus the bank's charges. */
@@ -50,7 +52,8 @@ data class DayMoney(
 object Pricing {
     private const val GRACE_MS = 15 * 60 * 1000L
 
-    fun price(entries: List<Entry>, payments: List<PaymentRow>, items: List<CostItemRow>, now: Long): DayMoney {
+    fun price(entries: List<Entry>, payments: List<PaymentRow>, items: List<CostItemRow>, now: Long,
+              also: Map<Long, List<String>> = emptyMap()): DayMoney {
         if (payments.isEmpty() && items.isEmpty()) return DayMoney.NONE
         val charges = HashMap<Int, MutableList<Charge>>()
         val unplaced = ArrayList<Charge>()
@@ -68,7 +71,8 @@ object Pricing {
                 if (gap <= GRACE_MS && gap < bestGap) { best = i; bestGap = gap }
             }
             if (best < 0) best = entries.indexOfFirst { p.time in it.start..it.end }
-            val charge = Charge(p, outsideByMin = if (bestGap in 1..GRACE_MS) ((bestGap + 30_000) / 60_000).toInt() else 0)
+            val charge = Charge(p, outsideByMin = if (bestGap in 1..GRACE_MS) ((bestGap + 30_000) / 60_000).toInt() else 0,
+                alsoFrom = also[p.id].orEmpty())
             if (best < 0) unplaced += charge else charges.getOrPut(best) { ArrayList() } += charge
         }
 

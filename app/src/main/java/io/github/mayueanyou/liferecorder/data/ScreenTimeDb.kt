@@ -71,8 +71,8 @@ interface ScreenTimeDao {
  */
 @Database(
     entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class, PlaceRow::class, LookupRow::class,
-        PaymentRow::class, CostItemRow::class, ScreenSessionRow::class],
-    version = 5, exportSchema = true,
+        PaymentRow::class, CostItemRow::class, ScreenSessionRow::class, MoneyRuleRow::class],
+    version = 6, exportSchema = true,
 )
 abstract class LifeDb : RoomDatabase() {
     abstract fun screenTime(): ScreenTimeDao
@@ -85,7 +85,7 @@ abstract class LifeDb : RoomDatabase() {
 
         fun get(context: Context): LifeDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, LifeDb::class.java, "life.db")
-                .addMigrations(ADD_FIXES, ADD_PLACES, ADD_MONEY, ADD_SESSIONS)
+                .addMigrations(ADD_FIXES, ADD_PLACES, ADD_MONEY, ADD_SESSIONS, ADD_MONEY_REVIEW)
                 .build().also { instance = it }
         }
 
@@ -140,6 +140,18 @@ abstract class LifeDb : RoomDatabase() {
                     "CREATE TABLE IF NOT EXISTS `screen_session` (`day` TEXT NOT NULL, `packageName` TEXT NOT NULL, " +
                         "`label` TEXT NOT NULL, `startAt` INTEGER NOT NULL, `endAt` INTEGER NOT NULL, " +
                         "PRIMARY KEY(`day`, `packageName`, `startAt`))",
+                )
+            }
+        }
+
+        /** 0.7 -> 0.8: purchases you confirm or reject, amounts to review, and your rules per app. */
+        private val ADD_MONEY_REVIEW = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `payment` ADD COLUMN `kind` TEXT NOT NULL DEFAULT 'purchase'")
+                db.execSQL("ALTER TABLE `payment` ADD COLUMN `verdict` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `money_rule` (`pkg` TEXT NOT NULL, `pattern` TEXT NOT NULL, " +
+                        "`count` INTEGER NOT NULL, PRIMARY KEY(`pkg`, `pattern`))",
                 )
             }
         }

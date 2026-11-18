@@ -53,7 +53,15 @@ class NotificationReader : NotificationListenerService() {
             Diagnostics.note(this, "money: Android hid a notification from ${sbn.packageName} as sensitive")
             return
         }
-        val amount = Reading.purchase(title, text) ?: return
+        val found = Reading.read(title, text, MoneyApps.homeCurrency()) ?: return
+        val amount = found.amount
+        val dao = LifeDb.get(this).money()
+        val maybe = found.kind == Reading.Kind.MAYBE
+        // An amount with nothing saying it was spent is kept for review only
+        // from an app that counts -- or one you made a rule for -- not from
+        // every shop advertising a price.
+        if (maybe && !MoneyApps.counts(this, sbn.packageName) &&
+            dao.rules().none { it.pkg == sbn.packageName && it.pattern == Reading.pattern(title, text) }) return
 
         val app = runCatching {
             packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString()
@@ -61,19 +69,29 @@ class NotificationReader : NotificationListenerService() {
             .split(Regex("\\s+")).joinToString(" ")   // labels carry non-breaking spaces surprisingly often
         // The time it says it happened, unless that is nonsense; otherwise when it was posted.
         val time = n.`when`.takeIf { kotlin.math.abs(it - sbn.postTime) < 24 * 3600_000L } ?: sbn.postTime
-        val dao = LifeDb.get(this).money()
         if (dao.countSame(sbn.packageName, text, time, SAME_WITHIN_MS) > 0) return
+        val merchant = Reading.merchant(app, title, text)
         dao.insertPayment(
             PaymentRow(
                 time = time, pkg = sbn.packageName, app = app, title = title, text = text,
-                amount = amount.value, currency = amount.currency, merchant = Reading.merchant(app, title, text),
+                amount = amount.value, currency = amount.currency, merchant = merchant,
+                kind = if (maybe) PaymentRow.KIND_MAYBE else PaymentRow.KIND_PURCHASE,
             ),
         )
-        Diagnostics.note(this, "money: read a purchase from $app" + if (MoneyApps.counts(this, sbn.packageName)) "" else " (not counted -- turn it on in Settings)")
+        dao.pruneReview(System.currentTimeMillis() - REVIEW_KEEP_MS)
+        MoneyApps.changed(this)
+        Diagnostics.note(this, "money: read ${if (maybe) "an amount to review" else "a purchase"} from $app" +
+            if (MoneyApps.counts(this, sbn.packageName)) "" else " (not counted yet)")
+        // A new app: ask once whether its purchases count.
+        if (!maybe && !MoneyApps.decided(this, sbn.packageName) && MoneyApps.firstAsk(this, sbn.packageName)) {
+            Ask.about(this, sbn.packageName, app,
+                Money.format(amount.value, amount.currency) + (merchant?.let { " at $it" } ?: ""))
+        }
     }
 
     companion object {
         private const val SAME_WITHIN_MS = 30 * 60 * 1000L
         private const val HIDDEN = "Sensitive notification content hidden"
+        private const val REVIEW_KEEP_MS = 7 * 24 * 3600_000L
     }
 }

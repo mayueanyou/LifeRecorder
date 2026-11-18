@@ -34,15 +34,17 @@ object Money {
         val today = LocalDate.now(zone)
         val byDay = LinkedHashMap<LocalDate, Double>()
         val currencies = HashSet<String>()
+        val judge = Judge.load(context)
+        val version = MoneyApps.version(context)
         for (d in 1..month.lengthOfMonth()) {
             val day = month.atDay(d)
             if (day > today) break
             val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
             val until = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-            val payments = db.money().payments(from, until).filter { MoneyApps.counts(context, it.pkg) }
+            val payments = Purchases.between(context, from, until, judge).payments
             val items = db.money().items(from, until)
             if (payments.isEmpty() && items.isEmpty()) continue     // nothing to add up: skip the day's replay
-            val print = "${payments.map { it.id }}|${items.map { it.id }}|${db.fixes().countBetween(from, until)}"
+            val print = "$version|${payments.map { it.id }}|${items.map { it.id }}|${db.fixes().countBetween(from, until)}"
             val result = synchronized(totals) { totals[day]?.takeIf { it.first == print && day != today }?.second }
                 ?: DayBuilder.build(context, day, zone, withScreen = false).money.let { it.total to it.currency }
                     .also { r -> synchronized(totals) { totals[day] = print to r } }

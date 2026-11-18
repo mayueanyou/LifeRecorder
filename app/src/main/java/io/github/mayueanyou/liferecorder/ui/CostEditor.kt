@@ -43,6 +43,11 @@ import io.github.mayueanyou.liferecorder.engine.Entry
 import io.github.mayueanyou.liferecorder.money.EntryMoney
 import io.github.mayueanyou.liferecorder.money.Money
 import io.github.mayueanyou.liferecorder.money.MoneyApps
+import io.github.mayueanyou.liferecorder.money.Reading
+import io.github.mayueanyou.liferecorder.data.MoneyRuleRow
+import io.github.mayueanyou.liferecorder.data.PaymentRow
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.layout.PaddingValues
 import io.github.mayueanyou.liferecorder.screentime.AppSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -75,6 +80,30 @@ fun CostEditor(entry: Entry, money: EntryMoney?, screen: List<AppSession>, onCha
         val label = what.trim().ifEmpty { null }
         amount = ""; what = ""
         change { dao.insertItem(CostItemRow(at = mid, amount = Math.round(value * 100) / 100.0, currency = currency, what = label)) }
+    }
+
+    // "Not a purchase": this one only, or every message shaped like it from that app.
+    var notPurchase by remember { mutableStateOf<PaymentRow?>(null) }
+    notPurchase?.let { p ->
+        val shape = Reading.pattern(p.title, p.text)
+        AlertDialog(
+            onDismissRequest = { notPurchase = null },
+            title = { Text("Not a purchase?") },
+            text = { Text("“${listOf(p.title, p.text).filter { it.isNotBlank() }.joinToString(" — ")}”\n\n" +
+                "Never count messages from ${MoneyApps.name(p.pkg, p.app)} that begin “$shape…”, or only this one?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    notPurchase = null
+                    change { dao.upsertRule(MoneyRuleRow(p.pkg, shape, false)); MoneyApps.changed(context) }
+                }) { Text("Never count these") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    notPurchase = null
+                    change { dao.setVerdict(p.id, -1); MoneyApps.changed(context) }
+                }) { Text("Just this one") }
+            },
+        )
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -116,18 +145,24 @@ fun CostEditor(entry: Entry, money: EntryMoney?, screen: List<AppSession>, onCha
                     Label(if (cleared) "FROM YOUR BANK · IGNORED HERE" else "FROM YOUR BANK")
                     charges.forEach { c ->
                         val p = c.payment
-                        val note = when {
-                            cleared -> "ignored"
-                            c.sameAsItem -> "also typed — counted once"
-                            c.outsideByMin > 0 -> "${c.outsideByMin} min outside the stay"
-                            else -> null
-                        }
+                        val note = listOfNotNull(
+                            when {
+                                cleared -> "ignored"
+                                c.sameAsItem -> "also typed — counted once"
+                                c.outsideByMin > 0 -> "${c.outsideByMin} min outside the stay"
+                                else -> null
+                            },
+                            c.alsoFrom.takeIf { it.isNotEmpty() }?.let { "also from ${it.joinToString()} — counted once" },
+                        ).joinToString(" · ").ifEmpty { null }
                         Line(
-                            left = (p.merchant ?: p.app) + " · " + timeOfDay(p.time),
+                            left = (p.merchant ?: MoneyApps.name(p.pkg, p.app)) + " · " + timeOfDay(p.time),
                             sub = note,
                             right = Money.format(p.amount, p.currency),
                             struck = cleared || c.sameAsItem,
                         )
+                        TextButton(onClick = { notPurchase = p }, contentPadding = PaddingValues(0.dp)) {
+                            Text("Not a purchase", fontSize = 12.sp)
+                        }
                     }
                 }
                 // Charges a "No cost" entry ignores are listed above; it still shows them.

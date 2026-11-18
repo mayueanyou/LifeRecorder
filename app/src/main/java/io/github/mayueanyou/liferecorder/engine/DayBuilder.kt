@@ -3,7 +3,7 @@ package io.github.mayueanyou.liferecorder.engine
 import android.content.Context
 import io.github.mayueanyou.liferecorder.data.LifeDb
 import io.github.mayueanyou.liferecorder.money.DayMoney
-import io.github.mayueanyou.liferecorder.money.MoneyApps
+import io.github.mayueanyou.liferecorder.money.Purchases
 import io.github.mayueanyou.liferecorder.money.Pricing
 import io.github.mayueanyou.liferecorder.places.Places
 import io.github.mayueanyou.liferecorder.screentime.AppSession
@@ -87,8 +87,8 @@ object DayBuilder {
             .sortedWith(compareBy<Entry>({ it.start }, { it.end }))
 
         val moneyDao = LifeDb.get(context).money()
-        val payments = moneyDao.payments(dayStart, dayEnd).filter { MoneyApps.counts(context, it.pkg) }
-        val money = Pricing.price(entries, payments, moneyDao.items(dayStart, dayEnd), now)
+        val counted = Purchases.between(context, dayStart, dayEnd)
+        val money = Pricing.price(entries, counted.payments, moneyDao.items(dayStart, dayEnd), now, counted.also)
         // A shop the map cannot name is still named on the card -- but only by a
         // charge made inside the stay: one matched in the minutes after it may
         // be from the next shop you walked to.

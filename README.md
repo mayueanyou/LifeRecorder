@@ -39,9 +39,15 @@ total and the day's sit at the top; each event shows its cost; tap an event
 to see the bank's charges, add your own items, or mark it "No cost". An item
 you type with the same amount as a bank charge counts once. Only a
 notification that reads as money spent is kept — "payment posted",
-balances, refunds and rewards are not. Banks count by default; any other app
-that sent a purchase is listed in Settings, off until you turn it on (a
-wallet app would count each purchase twice). Tap the day's name for the
+balances, refunds, rewards, transfers and one-time codes are not — in the
+main languages and in every common way of writing an amount ("$1,234.56",
+"1.234,56 €", "R$ 89,90", "Rs. 500"). A known bank counts by itself; any
+other app that sends a purchase — a wallet, Gmail showing the bank's alert,
+the Messages app showing the bank's text — is asked about once. The same
+purchase from several apps counts once, the bank's copy kept. Any charge can
+be marked "Not a purchase" (just that one, or every message shaped like it),
+and amounts from your money apps that did not read as a purchase wait a
+week in Settings › Money to be counted with a tap. Tap the day's name for the
 month, with what each day cost.
 
 **Backup.** Sign in with Google in Settings and each night your days go to

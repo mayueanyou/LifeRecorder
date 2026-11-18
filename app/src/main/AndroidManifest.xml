@@ -64,6 +64,10 @@
         </service>
 
         <receiver
+            android:name=".money.AnswerReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".location.LocationReceiver"
             android:exported="false" />
 

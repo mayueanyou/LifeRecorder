@@ -2,11 +2,13 @@ package io.github.mayueanyou.liferecorder.money
 
 import io.github.mayueanyou.liferecorder.data.CostItemRow
 import io.github.mayueanyou.liferecorder.data.PaymentRow
+import io.github.mayueanyou.liferecorder.data.MoneyRuleRow
 import io.github.mayueanyou.liferecorder.engine.Entry
 import io.github.mayueanyou.liferecorder.engine.Journey
 import io.github.mayueanyou.liferecorder.engine.Mode
 import io.github.mayueanyou.liferecorder.engine.Stay
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,6 +42,69 @@ class MoneyTest {
         assertNull(Reading.purchase("BofA", "Your available balance is \$2,000.00"))
         assertNull(Reading.purchase("BofA", "Refund of \$20.00 to credit card 1234"))
         assertNull(Reading.purchase("Receipt", "Order PIZZA HUT 039665 confirmed"))      // no currency
+    }
+
+    @Test fun otherCountriesAndLanguages() {
+        fun r(title: String, text: String, home: String = "USD") = Reading.read(title, text, home)
+        r("CaixaBank", "Compra aprobada por 45,90 € en MERCADONA")!!.let {
+            assertEquals(Reading.Kind.PURCHASE, it.kind); assertEquals(45.90, it.amount.value, 1e-9); assertEquals("EUR", it.amount.currency)
+        }
+        assertEquals("Mercadona", Reading.merchant("CaixaBank", "CaixaBank", "Compra aprobada por 45,90 € en MERCADONA"))
+        r("Sparkasse", "Kartenzahlung 1.234,56 € bei REWE")!!.let { assertEquals(1234.56, it.amount.value, 1e-9) }
+        r("Nubank", "Compra de R$ 89,90 aprovada")!!.let { assertEquals("BRL", it.amount.currency); assertEquals(89.90, it.amount.value, 1e-9) }
+        r("HDFC Bank", "Rs. 500.00 debited from A/c XX1234 on 12-11-26 at AMAZON")!!.let {
+            assertEquals("INR", it.amount.currency); assertEquals(500.0, it.amount.value, 1e-9)
+        }
+        assertEquals("Amazon", Reading.merchant("HDFC Bank", "HDFC Bank", "Rs. 500.00 debited from A/c XX1234 on 12-11-26 at AMAZON"))
+        r("Alipay", "支付成功 ¥1,200")!!.let { assertEquals("CNY", it.amount.currency); assertEquals(1200.0, it.amount.value, 1e-9) }
+        assertEquals("JPY", r("カード", "ご利用 ¥1,200", home = "JPY")!!.amount.currency)
+        assertEquals("CAD", r("RBC", "Purchase of $12.00", home = "CAD")!!.amount.currency)
+        // Not purchases, in any language.
+        assertNull(r("Bank", "您的验证码是 123456，消费 ¥50"))
+        assertNull(r("Bank", "Your OTP for txn of Rs 500 is 123456"))
+        assertNull(r("Bank", "Saldo disponible: 1.234,00 €"))
+        assertNull(r("Shop", "Your order of $45.00 has shipped"))
+        assertNull(r("Bank", "Reembolso de 20,00 € recibido"))
+    }
+
+    @Test fun anAmountAtAShopIsAPurchase() {
+        assertEquals(Reading.Kind.PURCHASE, Reading.read("Chase", "$25.00 at STARBUCKS")!!.kind)
+        assertEquals(Reading.Kind.MAYBE, Reading.read("Chase", "Account alert: $25.00")!!.kind)
+    }
+
+    @Test fun shapeLeavesTheNumbersOut() {
+        assertEquals(Reading.pattern("BofA", "Payment of $1,357.41 posted on 09/30/2026"),
+            Reading.pattern("BofA", "Payment of $20.00 posted on 10/01/2026"))
+    }
+
+    private fun row(id: Long, pkg: String, time: Long, amount: Double, text: String = "Purchase $amount",
+                    kind: String = PaymentRow.KIND_PURCHASE, verdict: Int = 0) =
+        PaymentRow(id = id, time = time, pkg = pkg, app = pkg, title = "", text = text, amount = amount,
+            currency = "USD", merchant = null, kind = kind, verdict = verdict)
+
+    @Test fun onePurchaseFromSeveralAppsCountsOnce() {
+        val bank = "com.infonow.bofa"
+        val wallet = "com.google.android.apps.walletnfcrel"
+        val (kept, also) = Copies.once(listOf(
+            row(1, wallet, 0, 10.0), row(2, bank, 2 * min, 10.0),     // one purchase, two reports: the bank's kept
+            row(3, bank, 3 * min, 5.0), row(4, bank, 4 * min, 5.0),   // two coffees from the bank: both
+        ))
+        assertEquals(listOf(2L, 3L, 4L), kept.map { it.id })
+        assertEquals(listOf("Google Wallet"), also[2L])
+    }
+
+    @Test fun yourWordThenYourRulesThenTheApp() {
+        val bank = "com.infonow.bofa"
+        val shop = "com.example.shop"
+        val posted = row(1, bank, 0, 50.0, text = "Payment of $50.00 posted")
+        val judge = Judge(on = emptySet(), off = emptySet(),
+            rules = listOf(MoneyRuleRow(bank, Reading.pattern("", "Payment of $50.00 posted"), false)))
+        assertFalse(judge.counts(posted))                                  // your rule
+        assertTrue(judge.counts(row(2, bank, 0, 9.0)))                     // a bank counts without asking
+        assertFalse(judge.counts(row(3, shop, 0, 9.0)))                    // another app waits for a yes
+        assertTrue(judge.counts(row(4, shop, 0, 9.0, verdict = 1)))        // ...unless you said this one is
+        assertFalse(judge.counts(row(5, bank, 0, 9.0, kind = PaymentRow.KIND_MAYBE)))   // a maybe waits for review
+        assertTrue(Judge(setOf(shop), emptySet(), emptyList()).counts(row(6, shop, 0, 9.0)))
     }
 
     private fun stay(start: Long, end: Long, live: Boolean = false) =

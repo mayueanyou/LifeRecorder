@@ -179,10 +179,6 @@ fun SettingsScreen() {
             }
         }
     }
-    var moneyVersion by remember { mutableIntStateOf(0) }
-    val moneyApps by produceState(emptyList<MoneyApp>(), checks, moneyVersion) {
-        value = withContext(Dispatchers.IO) { LifeDb.get(context).money().apps() }
-    }
 
     val status by produceState(Triple(0, null as Long?, null as Float?), checks) {
         while (true) {
@@ -263,24 +259,8 @@ fun SettingsScreen() {
         }
         item {
             Section("Money", "Purchases come only from notifications: each one goes to where you were when it arrived. " +
-                "Only a notification that reads as money spent is kept. Your bank counts; a wallet app would count the same purchase twice.") {
-                if (moneyApps.isEmpty()) {
-                    Text(if (reading) "No purchases read yet — they appear here after your next card payment."
-                        else "Allow notification access above to start.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                moneyApps.forEach { app ->
-                    var on by remember(app.pkg, moneyVersion) { mutableStateOf(MoneyApps.counts(context, app.pkg)) }
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(app.app, style = MaterialTheme.typography.titleSmall)
-                            Text("${app.count} purchase${if (app.count == 1) "" else "s"} read" +
-                                if (app.pkg in MoneyApps.BANKS) " · bank" else "",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Switch(checked = on, onCheckedChange = { MoneyApps.set(context, app.pkg, it); on = it; moneyVersion++ })
-                    }
-                }
+                "Your bank counts by itself; any other app is asked about once. The same purchase from several apps counts once.") {
+                MoneySection(reading, checks)
             }
         }
         item {
