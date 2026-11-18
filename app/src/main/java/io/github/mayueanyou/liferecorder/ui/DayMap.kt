@@ -159,25 +159,44 @@ private fun fit(map: MapView, entries: List<Entry>, here: Fix?) {
         is Entry.JourneyEntry -> e.journey.route.forEach { points += GeoPoint(it.lat, it.lon) }
     }
     if (points.isEmpty() && here != null) points += GeoPoint(here.lat, here.lon)
-    map.post {
+    val apply = {
         when {
-            points.size > 1 -> map.zoomToBoundingBox(BoundingBox.fromGeoPoints(points).increaseByScale(1.3f), false)
+            points.size > 1 -> map.zoomToBoundingBox(boxAround(points), false)
             points.size == 1 -> { map.controller.setZoom(16.0); map.controller.setCenter(points[0]) }
         }
     }
+    // Fitting a box needs the map's size; before its first layout osmdroid
+    // knows none and falls back to a view of the whole world.
+    if (map.isLayoutOccurred) map.post { apply() }
+    else map.addOnFirstLayoutListener { _, _, _, _, _ -> apply() }
 }
 
 private fun focus(map: MapView, entries: List<Entry>, index: Int) {
     when (val e = entries.getOrNull(index)) {
         is Entry.JourneyEntry -> {
             val pts = e.journey.route.map { GeoPoint(it.lat, it.lon) }
-            if (pts.size > 1) map.zoomToBoundingBox(BoundingBox.fromGeoPoints(pts).increaseByScale(1.3f), true)
+            if (pts.size > 1) map.zoomToBoundingBox(boxAround(pts), true)
         }
         is Entry.StayEntry -> {
             map.controller.animateTo(GeoPoint(e.stay.lat, e.stay.lon), max(map.zoomLevelDouble, 16.0), 400L)
         }
         null -> Unit
     }
+}
+
+/**
+ * The points' box with a margin, never thinner than a few hundred metres
+ * either way: a route straight north or along one street has a box of no
+ * width, and osmdroid zooms such a box out to the whole wrong side of the world.
+ */
+private fun boxAround(points: List<GeoPoint>): BoundingBox {
+    val box = BoundingBox.fromGeoPoints(points)
+    val minSpan = 0.003   // degrees, about 300 m
+    val latPad = max(box.latitudeSpan * 0.15, (minSpan - box.latitudeSpan) / 2)
+    // Plain east minus west: osmdroid's date-line span reads a box of no width as the whole globe.
+    val lonSpan = box.lonEast - box.lonWest
+    val lonPad = max(lonSpan * 0.15, (minSpan - lonSpan) / 2)
+    return BoundingBox(box.latNorth + latPad, box.lonEast + lonPad, box.latSouth - latPad, box.lonWest - lonPad)
 }
 
 private fun withAlpha(colour: Int, alpha: Float) = (colour and 0x00FFFFFF) or ((alpha * 255).toInt() shl 24)

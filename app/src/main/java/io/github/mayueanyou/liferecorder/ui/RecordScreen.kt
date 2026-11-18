@@ -193,9 +193,14 @@ private fun DayHeader(day: LocalDate, record: DayRecord?, onDay: (LocalDate) -> 
         else -> day.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
     }
     val places = record?.entries?.count { it is Entry.StayEntry } ?: 0
+    var picking by remember { mutableStateOf(false) }
+    if (picking) MonthCalendar(day, onPick = { picking = false; onDay(it) }, onDismiss = { picking = false })
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = { onDay(day.minusDays(1)) }) { Text("‹", fontSize = 22.sp) }
-        Text(name, style = MaterialTheme.typography.titleMedium)
+        // Tap the name for the month, to jump to any day.
+        TextButton(onClick = { picking = true }) {
+            Text("$name ▾", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+        }
         TextButton(onClick = { onDay(day.plusDays(1)) }, enabled = day < today) { Text("›", fontSize = 22.sp) }
         TextButton(onClick = onLocate) { Text("◎", fontSize = 22.sp) }
         Spacer(Modifier.weight(1f))
