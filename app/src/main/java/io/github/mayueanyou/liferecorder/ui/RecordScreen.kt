@@ -1,5 +1,6 @@
 package io.github.mayueanyou.liferecorder.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -350,19 +351,27 @@ private fun EventBlock(
             .clickable(onClick = onTap),
     ) {
         Box(Modifier.width(3.dp).fillMaxSize().background(if (on) ORANGE else edge))
-        // When the phone was in use, as marks down the right edge at their time.
-        if (screen.isNotEmpty() && entry.end > entry.start) {
+        // When the phone was in use, as marks down the right edge at their
+        // time, each with its app's icon in the middle when there is room.
+        val phoneBar = screen.isNotEmpty() && entry.end > entry.start
+        if (phoneBar) {
             val span = (entry.end - entry.start).toFloat()
             val h = block.height - 1.dp
-            Box(Modifier.align(Alignment.TopEnd).width(4.dp).fillMaxSize().background(PHONE.copy(alpha = .12f))) {
+            Box(Modifier.align(Alignment.TopEnd).width(PHONE_BAR).fillMaxSize().background(PHONE.copy(alpha = .12f))) {
                 screen.forEach { s ->
-                    Box(Modifier.offset(y = h * ((s.start - entry.start) / span))
-                        .height(maxOf(1.5.dp, h * ((s.end - s.start) / span))).fillMaxWidth().background(PHONE))
+                    val top = h * ((s.start - entry.start) / span)
+                    val tall = maxOf(1.5.dp, h * ((s.end - s.start) / span))
+                    Box(Modifier.offset(y = top).height(tall).fillMaxWidth().background(PHONE.copy(alpha = .85f)),
+                        contentAlignment = Alignment.Center) {
+                        if (tall >= ICON + 2.dp) appIcon(s.packageName)?.let {
+                            Image(it, contentDescription = s.label, modifier = Modifier.size(ICON).clip(RoundedCornerShape(4.dp)))
+                        }
+                    }
                 }
             }
         }
         Row(
-            Modifier.padding(start = 11.dp, end = 12.dp, top = if (tiny) 0.dp else 5.dp).fillMaxWidth()
+            Modifier.padding(start = 11.dp, end = if (phoneBar) PHONE_BAR + 6.dp else 12.dp, top = if (tiny) 0.dp else 5.dp).fillMaxWidth()
                 .let { if (tiny) it.fillMaxSize() else it },
             verticalAlignment = if (tiny) Alignment.CenterVertically else Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -401,6 +410,8 @@ private fun EventBlock(
 }
 
 private val PHONE = Color(0xFFF59E0B)
+private val PHONE_BAR = 20.dp    // wide enough for an app's icon
+private val ICON = 16.dp
 private val PHONE_TEXT = Color(0xFFB45309)
 
 /** Per app, its time during an entry, longest first. */
