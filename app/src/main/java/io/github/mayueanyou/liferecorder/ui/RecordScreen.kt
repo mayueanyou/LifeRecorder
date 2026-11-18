@@ -55,6 +55,7 @@ import io.github.mayueanyou.liferecorder.engine.Fix
 import io.github.mayueanyou.liferecorder.location.Recording
 import io.github.mayueanyou.liferecorder.places.Lookups
 import io.github.mayueanyou.liferecorder.money.EntryMoney
+import io.github.mayueanyou.liferecorder.screentime.AppSession
 import io.github.mayueanyou.liferecorder.money.Money
 import java.time.YearMonth
 import android.widget.Toast
@@ -135,7 +136,8 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
     editing?.let { i ->
         val entry = record?.entries?.getOrNull(i)
         if (entry == null) editing = null
-        else CostEditor(entry, record?.money?.perEntry?.get(i), onChanged = { moneyTick++ }, onDismiss = { editing = null })
+        else CostEditor(entry, record?.money?.perEntry?.get(i), record?.screen?.get(i).orEmpty(),
+            onChanged = { moneyTick++ }, onDismiss = { editing = null })
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -317,14 +319,18 @@ private fun Timeline(record: DayRecord?, day: LocalDate, selected: Int?, onTap: 
             blocks.forEach { b ->
                 val e = entries[b.index]
                 val number = if (e is Entry.StayEntry) (++stayNo).toString() else null
-                EventBlock(e, number, b, b.index == selected, record?.money?.perEntry?.get(b.index)) { onTap(b.index) }
+                EventBlock(e, number, b, b.index == selected, record?.money?.perEntry?.get(b.index),
+                    record?.screen?.get(b.index).orEmpty()) { onTap(b.index) }
             }
         }
     }
 }
 
 @Composable
-private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean, money: EntryMoney?, onTap: () -> Unit) {
+private fun EventBlock(
+    entry: Entry, number: String?, block: Block, on: Boolean, money: EntryMoney?,
+    screen: List<AppSession>, onTap: () -> Unit,
+) {
     val tiny = block.height < 40.dp
     val short = block.height < 72.dp
     val (edge, fill) = when (entry) {
@@ -344,8 +350,19 @@ private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean,
             .clickable(onClick = onTap),
     ) {
         Box(Modifier.width(3.dp).fillMaxSize().background(if (on) ORANGE else edge))
+        // When the phone was in use, as marks down the right edge at their time.
+        if (screen.isNotEmpty() && entry.end > entry.start) {
+            val span = (entry.end - entry.start).toFloat()
+            val h = block.height - 1.dp
+            Box(Modifier.align(Alignment.TopEnd).width(4.dp).fillMaxSize().background(PHONE.copy(alpha = .12f))) {
+                screen.forEach { s ->
+                    Box(Modifier.offset(y = h * ((s.start - entry.start) / span))
+                        .height(maxOf(1.5.dp, h * ((s.end - s.start) / span))).fillMaxWidth().background(PHONE))
+                }
+            }
+        }
         Row(
-            Modifier.padding(start = 11.dp, end = 8.dp, top = if (tiny) 0.dp else 5.dp).fillMaxWidth()
+            Modifier.padding(start = 11.dp, end = 12.dp, top = if (tiny) 0.dp else 5.dp).fillMaxWidth()
                 .let { if (tiny) it.fillMaxSize() else it },
             verticalAlignment = if (tiny) Alignment.CenterVertically else Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -364,6 +381,9 @@ private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean,
                     if (!short) Text(kind(entry), fontSize = 11.sp, letterSpacing = .5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(details(entry), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    phoneSummary(screen)?.takeIf { block.height >= 92.dp }?.let {
+                        Text(it, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = PHONE_TEXT)
+                    }
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -378,6 +398,22 @@ private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean,
             }
         }
     }
+}
+
+private val PHONE = Color(0xFFF59E0B)
+private val PHONE_TEXT = Color(0xFFB45309)
+
+/** Per app, its time during an entry, longest first. */
+internal fun byApp(screen: List<AppSession>): List<Pair<String, Long>> =
+    screen.groupBy { it.label }.map { (label, s) -> label to s.sumOf { it.millis } }.sortedByDescending { it.second }
+
+/** "📱 42m · X 30m, Chrome 8m" -- only apps used a minute or more are named. */
+internal fun phoneSummary(screen: List<AppSession>): String? {
+    val total = screen.sumOf { it.millis }
+    if (total < 60_000) return null
+    val named = byApp(screen).filter { it.second >= 60_000 }.take(2)
+        .joinToString(", ") { "${it.first} ${spellMinutes(it.second / 60_000)}" }
+    return "📱 ${spellMinutes(total / 60_000)}" + if (named.isNotEmpty()) " · $named" else ""
 }
 
 internal fun title(e: Entry) = when (e) {

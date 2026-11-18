@@ -44,7 +44,7 @@ object Money {
             if (payments.isEmpty() && items.isEmpty()) continue     // nothing to add up: skip the day's replay
             val print = "${payments.map { it.id }}|${items.map { it.id }}|${db.fixes().countBetween(from, until)}"
             val result = synchronized(totals) { totals[day]?.takeIf { it.first == print && day != today }?.second }
-                ?: DayBuilder.build(context, day, zone).money.let { it.total to it.currency }
+                ?: DayBuilder.build(context, day, zone, withScreen = false).money.let { it.total to it.currency }
                     .also { r -> synchronized(totals) { totals[day] = print to r } }
             result.first?.let { byDay[day] = it }
             result.second?.let { currencies += it }

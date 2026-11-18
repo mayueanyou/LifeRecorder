@@ -4,6 +4,7 @@ import android.content.Context
 import io.github.mayueanyou.liferecorder.data.LifeDb
 import io.github.mayueanyou.liferecorder.data.ScreenAppRow
 import io.github.mayueanyou.liferecorder.data.ScreenDayRow
+import io.github.mayueanyou.liferecorder.data.ScreenSessionRow
 import java.time.LocalDate
 
 /**
@@ -48,6 +49,7 @@ class ScreenTimeStore(context: Context) {
         dao.replace(
             ScreenDayRow(key, day.totalMillis, day.unlocks, System.currentTimeMillis()),
             day.apps.map { ScreenAppRow(key, it.packageName, it.label, it.millis) },
+            day.sessions.map { ScreenSessionRow(key, it.packageName, it.label, it.start, it.end) },
         )
     }
 
@@ -55,11 +57,13 @@ class ScreenTimeStore(context: Context) {
         val key = day.toString()
         val row = dao.day(key) ?: return null
         val apps = dao.apps(key).map { AppTime(it.packageName, it.label, it.millis) }
-        return DayScreenTime(day, row.totalMillis, row.unlocks, apps)
+        val sessions = dao.sessions(key).map { AppSession(it.packageName, it.label, it.startAt, it.endAt) }
+        return DayScreenTime(day, row.totalMillis, row.unlocks, apps, sessions)
     }
 
     companion object {
         private const val LIVE_DAYS = 6L
-        private const val SNAPSHOT_DAYS = 3
+        // The whole week Android still holds, so when each app was used is saved before it forgets.
+        private const val SNAPSHOT_DAYS = 7
     }
 }

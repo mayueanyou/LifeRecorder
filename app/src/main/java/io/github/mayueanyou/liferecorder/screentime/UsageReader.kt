@@ -12,12 +12,18 @@ import java.time.ZoneId
 /** How long one app was on screen during a day. */
 data class AppTime(val packageName: String, val label: String, val millis: Long)
 
-/** A day's screen time: the total, the apps behind it, and how often the phone was unlocked. */
+/** One stretch of one app on screen, from when to when. */
+data class AppSession(val packageName: String, val label: String, val start: Long, val end: Long) {
+    val millis get() = end - start
+}
+
+/** A day's screen time: the total, the apps behind it, how often the phone was unlocked, and when each app was used. */
 data class DayScreenTime(
     val day: LocalDate,
     val totalMillis: Long,
     val unlocks: Int,
     val apps: List<AppTime>,
+    val sessions: List<AppSession> = emptyList(),
 )
 
 /**
@@ -57,6 +63,7 @@ class UsageReader(private val context: Context) {
         val events = manager.queryEvents(dayStart - LOOK_BACK_MILLIS, until)
         val excluded = launchers() + IGNORED
         val totals = HashMap<String, Long>()
+        val raw = ArrayList<Triple<String, Long, Long>>()
         var unlocks = 0
         var current: String? = null
         var since = 0L
@@ -65,7 +72,10 @@ class UsageReader(private val context: Context) {
             val pkg = current ?: return
             val from = maxOf(since, dayStart)
             val to = minOf(at, until)
-            if (to > from && pkg !in excluded) totals[pkg] = (totals[pkg] ?: 0L) + (to - from)
+            if (to > from && pkg !in excluded) {
+                totals[pkg] = (totals[pkg] ?: 0L) + (to - from)
+                raw += Triple(pkg, from, to)
+            }
             current = null
         }
 
@@ -96,7 +106,26 @@ class UsageReader(private val context: Context) {
             .filter { it.value >= MIN_MILLIS }
             .map { AppTime(it.key, labelOf(it.key), it.value) }
             .sortedByDescending { it.millis }
-        return DayScreenTime(day, apps.sumOf { it.millis }, unlocks, apps)
+        return DayScreenTime(day, apps.sumOf { it.millis }, unlocks, apps, sessions(raw))
+    }
+
+    /**
+     * When each app was used. A glance at a notification or the lock screen
+     * splits one sitting into pieces; pieces of the same app less than a
+     * minute apart are one sitting again.
+     */
+    private fun sessions(raw: List<Triple<String, Long, Long>>): List<AppSession> {
+        val merged = ArrayList<AppSession>()
+        val labels = HashMap<String, String>()
+        for ((pkg, from, to) in raw.sortedBy { it.second }) {
+            val last = merged.lastOrNull { it.packageName == pkg }
+            if (last != null && from - last.end <= MERGE_GAP_MILLIS && merged.last() === last) {
+                merged[merged.size - 1] = last.copy(end = maxOf(last.end, to))
+            } else {
+                merged += AppSession(pkg, labels.getOrPut(pkg) { labelOf(pkg) }, from, to)
+            }
+        }
+        return merged.filter { it.millis >= MIN_MILLIS }
     }
 
     private fun launchers(): Set<String> {
@@ -116,6 +145,7 @@ class UsageReader(private val context: Context) {
         private const val LOOK_BACK_MILLIS = 6 * 60 * 60 * 1000L
         // Under a second is a flicker between apps, not use.
         private const val MIN_MILLIS = 1000L
+        private const val MERGE_GAP_MILLIS = 60_000L
         private val IGNORED = setOf("com.android.systemui", "android")
     }
 }

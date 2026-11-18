@@ -6,6 +6,8 @@ import io.github.mayueanyou.liferecorder.money.DayMoney
 import io.github.mayueanyou.liferecorder.money.MoneyApps
 import io.github.mayueanyou.liferecorder.money.Pricing
 import io.github.mayueanyou.liferecorder.places.Places
+import io.github.mayueanyou.liferecorder.screentime.AppSession
+import io.github.mayueanyou.liferecorder.screentime.ScreenTimeStore
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.math.abs
@@ -20,6 +22,8 @@ class DayRecord(
     val missingStreets: List<Pair<Double, Double>>,
     val lastFix: Fix?,
     val money: DayMoney = DayMoney.NONE,
+    /** Per entry, the apps on screen during it, each cut to the entry's own time. */
+    val screen: Map<Int, List<AppSession>> = emptyMap(),
 )
 
 /**
@@ -36,7 +40,8 @@ object DayBuilder {
     private const val AFTER_MS = 6 * 60 * 60 * 1000L
     private const val MIN_PIECE_MS = 60 * 1000L
 
-    suspend fun build(context: Context, day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): DayRecord {
+    /** [withScreen] false skips reading screen time -- for adding up money across a month. */
+    suspend fun build(context: Context, day: LocalDate, zone: ZoneId = ZoneId.systemDefault(), withScreen: Boolean = true): DayRecord {
         val dayStart = day.atStartOfDay(zone).toInstant().toEpochMilli()
         val dayEnd = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val now = System.currentTimeMillis()
@@ -96,7 +101,24 @@ object DayBuilder {
                 stay.exact = true
             }
         }
-        return DayRecord(day, entries, missingBuildings, missingStreets, fixes.lastOrNull(), money)
+        val sessions = if (!withScreen) emptyList()
+            else runCatching { ScreenTimeStore(context).day(day)?.sessions }.getOrNull().orEmpty()
+        return DayRecord(day, entries, missingBuildings, missingStreets, fixes.lastOrNull(), money, screenDuring(entries, sessions))
+    }
+
+    /** Each app session given to the entries it overlaps, cut to each one's time -- a sitting across a departure is split. */
+    private fun screenDuring(entries: List<Entry>, sessions: List<AppSession>): Map<Int, List<AppSession>> {
+        if (sessions.isEmpty()) return emptyMap()
+        val out = HashMap<Int, List<AppSession>>()
+        entries.forEachIndexed { i, e ->
+            val during = sessions.mapNotNull { s ->
+                val a = max(s.start, e.start)
+                val b = min(s.end, e.end)
+                if (b - a >= 1000) s.copy(start = a, end = b) else null
+            }
+            if (during.isNotEmpty()) out[i] = during
+        }
+        return out
     }
 
     private fun endName(places: Places, stays: List<Stay>, transfer: Boolean, lat: Double, lon: Double,

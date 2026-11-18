@@ -8,6 +8,7 @@ import io.github.mayueanyou.liferecorder.data.PaymentRow
 import io.github.mayueanyou.liferecorder.data.PlaceRow
 import io.github.mayueanyou.liferecorder.data.ScreenAppRow
 import io.github.mayueanyou.liferecorder.data.ScreenDayRow
+import io.github.mayueanyou.liferecorder.data.ScreenSessionRow
 import io.github.mayueanyou.liferecorder.engine.DayBuilder
 import io.github.mayueanyou.liferecorder.engine.Entry
 import org.json.JSONArray
@@ -78,6 +79,12 @@ object DayFile {
                         a.put(JSONObject().put("package", app.packageName).put("label", app.label).put("ms", app.millis))
                     }
                 })
+                .put("sessions", JSONArray().also { a ->
+                    db.screenTime().sessions(day.toString()).forEach { s ->
+                        a.put(JSONObject().put("package", s.packageName).put("label", s.label)
+                            .put("start", s.startAt).put("end", s.endAt))
+                    }
+                })
         }
         return JSONObject()
             .put("app", "Life Recorder").put("format", FORMAT).put("date", day.toString()).put("time_zone", zone.id)
@@ -135,13 +142,21 @@ object DayFile {
         }
         json.optJSONObject("screen_time")?.let { s ->
             val day = json.getString("date")
+            val sessionsIn = s.optJSONArray("sessions") ?: JSONArray()
+            val sessions = (0 until sessionsIn.length()).map { sessionsIn.getJSONObject(it) }.map {
+                ScreenSessionRow(day, it.getString("package"), it.getString("label"), it.getLong("start"), it.getLong("end"))
+            }
             if (db.screenTime().day(day) == null) {
                 val apps = s.optJSONArray("apps") ?: JSONArray()
                 db.screenTime().replace(
                     ScreenDayRow(day, s.getLong("total_ms"), s.getInt("unlocks"), s.optLong("saved_at")),
                     (0 until apps.length()).map { apps.getJSONObject(it) }
                         .map { ScreenAppRow(day, it.getString("package"), it.getString("label"), it.getLong("ms")) },
+                    sessions,
                 )
+                added++
+            } else if (sessions.isNotEmpty() && db.screenTime().sessions(day).isEmpty()) {
+                db.screenTime().upsertSessions(sessions)
                 added++
             }
         }

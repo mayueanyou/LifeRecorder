@@ -43,6 +43,7 @@ import io.github.mayueanyou.liferecorder.engine.Entry
 import io.github.mayueanyou.liferecorder.money.EntryMoney
 import io.github.mayueanyou.liferecorder.money.Money
 import io.github.mayueanyou.liferecorder.money.MoneyApps
+import io.github.mayueanyou.liferecorder.screentime.AppSession
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -55,7 +56,7 @@ val MONEY_GREEN = Color(0xFF22C55E)
  * add one or say it cost nothing. Every change is saved at once.
  */
 @Composable
-fun CostEditor(entry: Entry, money: EntryMoney?, onChanged: () -> Unit, onDismiss: () -> Unit) {
+fun CostEditor(entry: Entry, money: EntryMoney?, screen: List<AppSession>, onChanged: () -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val dao = remember { LifeDb.get(context).money() }
@@ -88,6 +89,25 @@ fun CostEditor(entry: Entry, money: EntryMoney?, onChanged: () -> Unit, onDismis
                     Text(money?.total?.let { Money.format(it, money.currency) } ?: "No cost",
                         fontSize = 26.sp, fontWeight = FontWeight.SemiBold,
                         color = if (money?.total != null) MONEY_GREEN else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                // What was on the phone's screen meanwhile: each app, its time, and when.
+                val apps = byApp(screen)
+                if (apps.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Label("ON YOUR PHONE · " + spellMinutes(screen.sumOf { it.millis } / 60_000).let { if (it == "0m") "under a minute" else it })
+                    var showAll by remember { mutableStateOf(false) }
+                    (if (showAll) apps else apps.take(6)).forEach { (label, millis) ->
+                        val times = screen.filter { it.label == label }.filter { it.millis >= 60_000 }
+                        Line(
+                            left = label,
+                            sub = times.take(3).joinToString(", ") { "${timeOfDay(it.start)}–${timeOfDay(it.end)}" } +
+                                if (times.size > 3) " +${times.size - 3} more" else "",
+                            right = if (millis < 60_000) "<1m" else spellMinutes(millis / 60_000),
+                            struck = false,
+                        )
+                    }
+                    if (apps.size > 6 && !showAll) TextButton(onClick = { showAll = true }) { Text("All ${apps.size} apps") }
                 }
 
                 val charges = money?.charges.orEmpty()
@@ -179,7 +199,7 @@ private fun Line(left: String, sub: String?, right: String, struck: Boolean) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(left, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (sub != null) Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!sub.isNullOrEmpty()) Text(sub, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Text(right, fontSize = 15.sp,
             textDecoration = if (struck) TextDecoration.LineThrough else null,

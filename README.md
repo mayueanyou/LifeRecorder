@@ -55,6 +55,12 @@ replaces) and Sign out are in Settings.
 **Screen time.** For each day: total time on screen, the number of unlocks,
 and every app you used with how long, longest first.
 
+Each stay and journey also shows what was on your screen during it: amber
+marks down its right edge at the times the phone was in use, a line such as
+"📱 42m · X 30m, Chrome 8m", and, when you tap it, every app with its times
+("X · 2:00–2:30 PM"). Android keeps that detail for about a week, so Life
+Recorder saves each app session as it goes.
+
 Numbers come from Android's own usage record — the same source the system's
 Digital Wellbeing screen uses — read with the *Usage access* permission you
 grant. Android keeps that detail for about a week; Life Recorder saves each

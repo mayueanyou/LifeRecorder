@@ -20,6 +20,10 @@ data class ScreenDayRow(val day: String, val totalMillis: Long, val unlocks: Int
 @Entity(tableName = "screen_app", primaryKeys = ["day", "packageName"])
 data class ScreenAppRow(val day: String, val packageName: String, val label: String, val millis: Long)
 
+/** One stretch of one app on screen. Kept because Android forgets the detail after about a week. */
+@Entity(tableName = "screen_session", primaryKeys = ["day", "packageName", "startAt"])
+data class ScreenSessionRow(val day: String, val packageName: String, val label: String, val startAt: Long, val endAt: Long)
+
 @Dao
 interface ScreenTimeDao {
     @Query("SELECT * FROM screen_day WHERE day = :day")
@@ -39,12 +43,25 @@ interface ScreenTimeDao {
     @Query("DELETE FROM screen_app WHERE day = :day")
     suspend fun clearApps(day: String)
 
+    @Query("SELECT * FROM screen_session WHERE day = :day ORDER BY startAt")
+    suspend fun sessions(day: String): List<ScreenSessionRow>
+
+    @Upsert suspend fun upsertSessions(rows: List<ScreenSessionRow>)
+
+    @Query("DELETE FROM screen_session WHERE day = :day")
+    suspend fun clearSessions(day: String)
+
     /** A day is always replaced whole, so an app that vanished from it does not linger. */
     @Transaction
-    suspend fun replace(day: ScreenDayRow, apps: List<ScreenAppRow>) {
+    suspend fun replace(day: ScreenDayRow, apps: List<ScreenAppRow>, sessions: List<ScreenSessionRow>? = null) {
         upsertDay(day)
         clearApps(day.day)
         upsertApps(apps)
+        // A day saved before sessions were kept has none; it is left so rather than emptied.
+        if (sessions != null) {
+            clearSessions(day.day)
+            upsertSessions(sessions)
+        }
     }
 }
 
@@ -54,8 +71,8 @@ interface ScreenTimeDao {
  */
 @Database(
     entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class, PlaceRow::class, LookupRow::class,
-        PaymentRow::class, CostItemRow::class],
-    version = 4, exportSchema = true,
+        PaymentRow::class, CostItemRow::class, ScreenSessionRow::class],
+    version = 5, exportSchema = true,
 )
 abstract class LifeDb : RoomDatabase() {
     abstract fun screenTime(): ScreenTimeDao
@@ -68,7 +85,7 @@ abstract class LifeDb : RoomDatabase() {
 
         fun get(context: Context): LifeDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, LifeDb::class.java, "life.db")
-                .addMigrations(ADD_FIXES, ADD_PLACES, ADD_MONEY)
+                .addMigrations(ADD_FIXES, ADD_PLACES, ADD_MONEY, ADD_SESSIONS)
                 .build().also { instance = it }
         }
 
@@ -113,6 +130,17 @@ abstract class LifeDb : RoomDatabase() {
                         "`cleared` INTEGER NOT NULL)",
                 )
                 db.execSQL("CREATE INDEX IF NOT EXISTS `index_cost_item_at` ON `cost_item` (`at`)")
+            }
+        }
+
+        /** 0.5 -> 0.6: when each app was used, not only for how long. */
+        private val ADD_SESSIONS = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `screen_session` (`day` TEXT NOT NULL, `packageName` TEXT NOT NULL, " +
+                        "`label` TEXT NOT NULL, `startAt` INTEGER NOT NULL, `endAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`day`, `packageName`, `startAt`))",
+                )
             }
         }
     }
