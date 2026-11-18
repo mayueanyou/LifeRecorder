@@ -2,6 +2,8 @@ package io.github.mayueanyou.liferecorder.ui
 
 import android.content.Intent
 import android.os.Bundle
+import io.github.mayueanyou.liferecorder.location.LocationService
+import io.github.mayueanyou.liferecorder.location.Recording
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -64,6 +66,15 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
+    override fun onResume() {
+        super.onResume()
+        // Android may refuse to restart a stopped recorder from the background,
+        // but never while the app is open -- so opening it always resumes recording.
+        if (Recording.wanted(this) && Recording.hasForeground(this) && !LocationService.running) {
+            Recording.start(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

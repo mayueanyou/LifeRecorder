@@ -54,6 +54,10 @@
             android:foregroundServiceType="location" />
 
         <receiver
+            android:name=".location.LocationReceiver"
+            android:exported="false" />
+
+        <receiver
             android:name=".location.BootReceiver"
             android:exported="false">
             <intent-filter>

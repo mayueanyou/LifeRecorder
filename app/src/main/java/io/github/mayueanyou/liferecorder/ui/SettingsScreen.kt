@@ -119,7 +119,7 @@ fun SettingsScreen() {
                 Step("Notifications — the small \"recording\" notice", notifications) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askOne.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-                Step("Battery: Unrestricted — so Android never pauses it", unrestricted) {
+                Step("Battery: Unrestricted — required; without it Android stops recording", unrestricted) {
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                 }
             }
@@ -136,6 +136,19 @@ fun SettingsScreen() {
                         if (on) Recording.start(context) else Recording.stop(context)
                         recording = on
                     })
+                }
+                if (recording && !unrestricted) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("⚠ Battery is not Unrestricted, so Android can stop recording without warning. Allow it above.",
+                        color = MaterialTheme.colorScheme.error)
+                }
+                status.second?.let { last ->
+                    val minutes = (System.currentTimeMillis() - last) / 60_000
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (recording && minutes >= 30)
+                        "⚠ Nothing recorded for ${spellMinutes(minutes)} — fine if you have been still; if you have moved, recording has stopped. Turn it off and on."
+                    else "Last position ${if (minutes < 1) "just now" else "${spellMinutes(minutes)} ago"}",
+                        color = if (recording && minutes >= 30) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(8.dp))
                 Text("Today: ${status.first} positions" + (status.second?.let { " · last ${clock(it)}" } ?: "") +

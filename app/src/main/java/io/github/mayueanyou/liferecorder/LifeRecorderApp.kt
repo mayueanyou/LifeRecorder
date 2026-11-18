@@ -10,6 +10,7 @@ class LifeRecorderApp : Application() {
         super.onCreate()
         Diagnostics.install(this)
         SnapshotWorker.schedule(this)
+        io.github.mayueanyou.liferecorder.location.Watchdog.schedule(this)
         // OpenStreetMap asks every app for a name of its own, and map tiles
         // are cached in the app's own storage.
         Configuration.getInstance().apply {
