@@ -129,7 +129,7 @@ private fun ScreenTimeScreen(onOpenSettings: () -> Unit) {
         value = withContext(Dispatchers.IO) { store.day(day) }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Life Recorder") }) }) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text("Life Tracker") }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
             if (!hasAccess) {
                 AccessCard(onOpenSettings)

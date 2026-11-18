@@ -8,13 +8,15 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /**
- * My Drive / Life Recorder / 2026-11 / 2026-11-17.json, one file per day,
+ * My Drive / Life Tracker / 2026-11 / 2026-11-17.json, one file per day,
  * plus places.json. Only a day that changed since it was last written is
  * written again, so a nightly run after the first touches a day or two.
  */
 object Backup {
     private const val PREFS = "backup_files"
-    private const val ROOT = "Life Recorder"
+    private const val ROOT = "Life Tracker"
+    // The app was called Life Recorder; a folder made then is found, and renamed, rather than left beside a new one.
+    private const val OLD_ROOT = "Life Recorder"
 
     data class Status(val at: Long, val days: Int, val error: String?)
 
@@ -36,7 +38,12 @@ object Backup {
         try {
             if (GoogleAccount.email(context) == null) GoogleAccount.remember(context, drive.email())
             val root = prefs.getString("folder:root", null)?.takeIf { exists(drive, it) }
+                ?: drive.findFolder(ROOT, null)?.also { prefs.edit().putString("folder:root", it).apply() }
+                ?: drive.findFolder(OLD_ROOT, null)?.also { prefs.edit().putString("folder:root", it).apply() }
                 ?: drive.folder(ROOT, null).also { prefs.edit().putString("folder:root", it).apply() }
+            if (!prefs.getBoolean("root_renamed", false)) {
+                runCatching { drive.rename(root, ROOT) }.onSuccess { prefs.edit().putBoolean("root_renamed", true).apply() }
+            }
 
             val days = allDays(context)
             var written = 0
@@ -73,7 +80,7 @@ object Backup {
     /** Reads every day back from Drive into the phone, adding what is missing. Returns how much was added. */
     suspend fun restore(context: Context, token: String, progress: (String) -> Unit = {}): Int {
         val drive = Drive(token)
-        val root = drive.findFolder(ROOT, null) ?: return 0
+        val root = drive.findFolder(ROOT, null) ?: drive.findFolder(OLD_ROOT, null) ?: return 0
         var added = 0
         val top = drive.list(root)
         top.firstOrNull { it.name == "places.json" }?.let { added += DayFile.readPlaces(context, drive.download(it.id)) }

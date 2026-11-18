@@ -1,5 +1,5 @@
 name: Suggest something
-description: An idea, a wish, or something you would like Life Recorder to do differently.
+description: An idea, a wish, or something you would like Life Tracker to do differently.
 labels: [idea]
 body:
   - type: textarea

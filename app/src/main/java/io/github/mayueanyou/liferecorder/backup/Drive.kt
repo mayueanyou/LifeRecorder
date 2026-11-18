@@ -35,6 +35,11 @@ class Drive(private val token: String) {
 
     fun folder(name: String, parent: String?): String = findFolder(name, parent) ?: createFolder(name, parent)
 
+    /** Renames one of this app's own files or folders. */
+    fun rename(id: String, name: String) {
+        call("PATCH", "$API/files/$id?fields=id", JSONObject().put("name", name).toString(), "application/json")
+    }
+
     /** Everything directly in [parent], folders included. */
     fun list(parent: String): List<Item> {
         val out = ArrayList<Item>()

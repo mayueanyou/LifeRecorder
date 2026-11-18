@@ -66,7 +66,7 @@ interface ScreenTimeDao {
 }
 
 /**
- * Everything Life Recorder keeps, on the phone only. Screen time is the first
+ * Everything Life Tracker keeps, on the phone only. Screen time is the first
  * table; places, journeys and costs will join it here.
  */
 @Database(

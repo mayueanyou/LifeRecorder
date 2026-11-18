@@ -29,7 +29,7 @@ import java.net.URLEncoder
  * as its usage policy requires.
  */
 object Lookups {
-    private const val AGENT = "LifeRecorder/0.3 (Android; https://github.com/mayueanyou/LifeRecorder)"
+    private const val AGENT = "LifeTracker/0.9 (Android; https://github.com/mayueanyou/LifeTracker)"
     private const val SEARCH_M = 90
     private const val NEAR_M = 35.0
 

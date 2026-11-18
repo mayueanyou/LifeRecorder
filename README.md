@@ -1,13 +1,15 @@
-# Life Recorder
+# Life Tracker
+
+*Formerly Life Recorder.*
 
 **Where does your time go? Where does your money go?**
-Life Recorder is an Android app that quietly records your days — the places
+Life Tracker is an Android app that quietly records your days — the places
 you go, how you get there, what you spend, and how you use your phone — so
 you can see your life clearly and change what you want to change.
 
-[Download](https://github.com/mayueanyou/LifeRecorder/releases/latest) ·
-[Privacy policy](https://mayueanyou.github.io/LifeRecorder/privacy.html) ·
-[Tell me what you think](https://github.com/mayueanyou/LifeRecorder/issues/new/choose)
+[Download](https://github.com/mayueanyou/LifeTracker/releases/latest) ·
+[Privacy policy](https://mayueanyou.github.io/LifeTracker/privacy.html) ·
+[Tell me what you think](https://github.com/mayueanyou/LifeTracker/issues/new/choose)
 
 ---
 
@@ -16,7 +18,7 @@ you can see your life clearly and change what you want to change.
 Most of us don't really know where our hours and our money go. A week feels
 busy, the bank balance feels lower than it should — but the details vanish.
 
-Life Recorder keeps those details for you, without you typing anything. At
+Life Tracker keeps those details for you, without you typing anything. At
 the end of a day, a week or a month you can look back and see it plainly:
 the evenings spent at home, the times you went out, the money spent on
 restaurants, the hours on your phone. Knowing that is the first step to
@@ -27,10 +29,10 @@ yourself a little better.
 ## Your data stays yours
 
 - **On your phone, or in your own Google Drive — nowhere else.** Everything
-  Life Recorder records is stored on your phone. If you choose to sign in
+  Life Tracker records is stored on your phone. If you choose to sign in
   with Google, it is also backed up to *your own* Google Drive, as plain
   files you can open and read yourself.
-- **No account, no server, no ads, no tracking.** There is no Life Recorder
+- **No account, no server, no ads, no tracking.** There is no Life Tracker
   server. Nothing you record is ever sent to me or to anyone else.
 - **You decide.** Every permission is asked for one step at a time, with the
   reason. You can turn recording off, remove places, sign out of Google, or
@@ -41,7 +43,7 @@ yourself a little better.
 - **Everything comes from your own phone.** Your position comes from your
   phone's location; your purchases from the notifications your bank already
   sends to your phone; your screen time from Android's own usage record.
-  Life Recorder reads them on the phone and works everything out on the
+  Life Tracker reads them on the phone and works everything out on the
   phone.
 - **Only what it needs is kept.** From notifications, only the ones that read
   as money spent are stored — never your messages, chats or anything else.
@@ -71,14 +73,14 @@ yourself a little better.
 
 ## Get the app
 
-Life Recorder is in testing and not on the Play Store yet.
+Life Tracker is in testing and not on the Play Store yet.
 
 1. Download the latest `.apk` from
-   [Releases](https://github.com/mayueanyou/LifeRecorder/releases/latest) and
+   [Releases](https://github.com/mayueanyou/LifeTracker/releases/latest) and
    open it on your Android phone (Android 8 or newer).
 2. To get updates automatically, add this repository to
    [Obtainium](https://github.com/ImranR98/Obtainium):
-   `https://github.com/mayueanyou/LifeRecorder`.
+   `https://github.com/mayueanyou/LifeTracker`.
 3. Open **Settings** in the app and go through the steps. For recording that
    never stops, set Battery to **Unrestricted**.
 
@@ -86,16 +88,16 @@ Life Recorder is in testing and not on the Play Store yet.
 
 This app gets better from your feedback, and I read every issue.
 
-- **Something not working?** [Report a problem](https://github.com/mayueanyou/LifeRecorder/issues/new?template=bug.yml).
+- **Something not working?** [Report a problem](https://github.com/mayueanyou/LifeTracker/issues/new?template=bug.yml).
   Settings › *Share diagnostics* gives a short report with no locations in it
   that helps a lot.
-- **An idea or a wish?** [Suggest something](https://github.com/mayueanyou/LifeRecorder/issues/new?template=idea.yml).
+- **An idea or a wish?** [Suggest something](https://github.com/mayueanyou/LifeTracker/issues/new?template=idea.yml).
 - **Your bank's purchases not counted, or counted wrong?**
-  [Tell me about your bank](https://github.com/mayueanyou/LifeRecorder/issues/new?template=bank.yml) —
-  with a masked example of its notification, so Life Recorder can learn to
+  [Tell me about your bank](https://github.com/mayueanyou/LifeTracker/issues/new?template=bank.yml) —
+  with a masked example of its notification, so Life Tracker can learn to
   read it for everyone who banks there.
 - **Anything else** — questions, thoughts, what you learned about your own
-  days — [open an issue](https://github.com/mayueanyou/LifeRecorder/issues/new/choose).
+  days — [open an issue](https://github.com/mayueanyou/LifeTracker/issues/new/choose).
   Comments on existing issues are welcome too.
 
 ---
@@ -132,11 +134,11 @@ your own items or mark it "No cost".
 
 **Screen time** comes from Android's own usage record — the source Digital
 Wellbeing uses — read with the *Usage access* permission you grant. Android
-keeps the detail for about a week; Life Recorder saves each day and each app
+keeps the detail for about a week; Life Tracker saves each day and each app
 session as it goes and never deletes them, so history lasts.
 
 **Backup.** Each night, days that changed are written to
-*My Drive › Life Recorder › 2026-11 › 2026-11-17.json* as plain JSON — the
+*My Drive › Life Tracker › 2026-11 › 2026-11-17.json* as plain JSON — the
 day's positions, stays and journeys, purchases, typed costs and screen time —
 plus your named places. Only the `drive.file` permission is asked for.
 Restore adds what the phone lacks and never replaces anything.

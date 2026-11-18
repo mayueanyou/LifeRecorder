@@ -25,6 +25,9 @@ import java.time.ZoneId
  */
 object DayFile {
     const val FORMAT = 1
+    const val APP = "Life Tracker"
+    // Files written before the app was renamed say "Life Recorder"; they restore all the same.
+    private val KNOWN_APPS = setOf(APP, "Life Recorder")
 
     /** What decides whether a day changed since it was last written: everything a restore reads back. */
     suspend fun fingerprint(context: Context, day: LocalDate, zone: ZoneId = ZoneId.systemDefault()): String? {
@@ -87,7 +90,7 @@ object DayFile {
                 })
         }
         return JSONObject()
-            .put("app", "Life Recorder").put("format", FORMAT).put("date", day.toString()).put("time_zone", zone.id)
+            .put("app", APP).put("format", FORMAT).put("date", day.toString()).put("time_zone", zone.id)
             .put("money", JSONObject().putOpt("total", record.money.total).putOpt("currency", record.money.currency)
                 .put("purchases", purchases).put("items", items))
             .put("stays", stays).put("journeys", journeys)
@@ -99,7 +102,7 @@ object DayFile {
     /** Adds what the file holds and the phone does not; nothing on the phone is replaced or removed. */
     suspend fun read(context: Context, text: String): Int {
         val json = JSONObject(text)
-        if (json.optString("app") != "Life Recorder") return 0
+        if (json.optString("app") !in KNOWN_APPS) return 0
         val db = LifeDb.get(context)
         var added = 0
         json.optJSONArray("positions")?.let { a ->
@@ -168,7 +171,7 @@ object DayFile {
         LifeDb.get(context).places().places().forEach {
             places.put(JSONObject().put("name", it.name).put("lat", it.latitude).put("lon", it.longitude).put("radius", it.radius))
         }
-        return JSONObject().put("app", "Life Recorder").put("format", FORMAT).put("places", places).toString(1)
+        return JSONObject().put("app", APP).put("format", FORMAT).put("places", places).toString(1)
     }
 
     suspend fun readPlaces(context: Context, text: String): Int {

@@ -113,7 +113,7 @@ class LocationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
                 NotificationChannel(CHANNEL, "Recording", NotificationManager.IMPORTANCE_LOW).apply {
-                    description = "Shown while Life Recorder is recording your location."
+                    description = "Shown while Life Tracker is recording your location."
                     setShowBadge(false)
                 },
             )

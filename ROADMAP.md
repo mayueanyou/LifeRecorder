@@ -1,6 +1,6 @@
 # Roadmap
 
-Life Recorder is heading towards a full on-phone version of a day log that
+Life Tracker is heading towards a full on-phone version of a day log that
 already runs as a self-hosted web app: stays, journeys, routes, place names
 and spending, kept on the phone and optionally written to your own calendar.
 It is built to be publishable on the Play Store, which shapes every choice

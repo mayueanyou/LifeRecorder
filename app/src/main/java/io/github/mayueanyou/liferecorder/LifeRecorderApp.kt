@@ -17,7 +17,7 @@ class LifeRecorderApp : Application() {
         // OpenStreetMap asks every app for a name of its own, and map tiles
         // are cached in the app's own storage.
         Configuration.getInstance().apply {
-            userAgentValue = "LifeRecorder/0.3 (Android; https://github.com/mayueanyou/LifeRecorder)"
+            userAgentValue = "LifeTracker/0.9 (Android; https://github.com/mayueanyou/LifeTracker)"
             osmdroidBasePath = File(cacheDir, "osmdroid")
             osmdroidTileCache = File(cacheDir, "osmdroid/tiles")
         }

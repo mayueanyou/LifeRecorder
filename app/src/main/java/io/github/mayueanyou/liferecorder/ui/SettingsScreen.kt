@@ -232,13 +232,13 @@ fun SettingsScreen() {
         }
         item {
             Section("Google account", "Back up your days to your own Google Drive, as plain files you can open anywhere. " +
-                "Life Recorder can see only the files it makes there — nothing else in your Drive.") {
+                "Life Tracker can see only the files it makes there — nothing else in your Drive.") {
                 val who = email
                 if (who == null) {
                     Button(onClick = { withGoogle("signin") }, enabled = busy == null) { Text("Sign in with Google") }
                 } else {
                     Text("Signed in as $who", style = MaterialTheme.typography.titleSmall)
-                    Text("Backs up each night to My Drive › Life Recorder.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Backs up each night to My Drive › Life Tracker.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     backupStatus?.let { st ->
                         val ago = (System.currentTimeMillis() - st.at) / 60_000
                         Text(
@@ -344,7 +344,7 @@ fun SettingsScreen() {
             val size = remember(checks) {
                 listOf("life.db", "life.db-wal", "life.db-shm").sumOf { context.getDatabasePath(it).length() }
             }
-            Text("Life Recorder · everything is kept on this phone, for good · " +
+            Text("Life Tracker · everything is kept on this phone, for good · " +
                 String.format(java.util.Locale.getDefault(), "%.1f MB", size / 1_048_576.0) + " used",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
         }
@@ -427,7 +427,7 @@ private suspend fun diagnosticsReport(
     val last = fixes.latest(1).firstOrNull()
     val info = context.packageManager.getPackageInfo(context.packageName, 0)
     return buildString {
-        appendLine("Life Recorder ${info.versionName} (${info.longVersionCode}) on Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
+        appendLine("Life Tracker ${info.versionName} (${info.longVersionCode}) on Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("permissions: usage=$usage location=$foreground always=$background notifications=$notifications battery-unrestricted=$unrestricted")
         appendLine("recording on: $recording")
         appendLine("google account: ${if (GoogleAccount.signedIn(context)) "signed in" else "no"}; last backup: " +

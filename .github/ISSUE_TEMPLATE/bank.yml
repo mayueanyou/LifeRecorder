@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Life Recorder reads purchases from the notifications your bank sends. Banks word them differently,
+        Life Tracker reads purchases from the notifications your bank sends. Banks word them differently,
         so an example of yours lets the app learn to read it — for you and everyone who banks there.
 
         **Please mask it before pasting — this page is public:**
