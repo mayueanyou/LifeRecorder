@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -78,8 +79,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-// The timeline's scale: an hour is this tall -- enough that five minutes on one app has room for its icon.
-private val HOUR: Dp = 180.dp
+// The timeline's scale: an hour is this tall.
+private val HOUR: Dp = 132.dp
 private val MIN_BLOCK: Dp = 26.dp     // the least an entry is drawn at, however brief
 private val AXIS: Dp = 52.dp
 private val ORANGE = Color(0xFFF97316)
@@ -365,7 +366,9 @@ private fun EventBlock(
                     Box(Modifier.offset(y = top).height(tall).fillMaxWidth().background(PHONE.copy(alpha = .85f)),
                         contentAlignment = Alignment.Center) {
                         if (s.millis >= ICON_AFTER_MS) appIcon(s.packageName)?.let {
-                            Image(it, contentDescription = s.label, modifier = Modifier.size(ICON).clip(RoundedCornerShape(4.dp)))
+                            // Its own size even where the stretch is shorter than the icon: it
+                            // sits centred on the stretch and may overlap its edges a little.
+                            Image(it, contentDescription = s.label, modifier = Modifier.requiredSize(ICON).clip(RoundedCornerShape(4.dp)))
                         }
                     }
                 }
@@ -411,8 +414,8 @@ private fun EventBlock(
 }
 
 private val PHONE = Color(0xFFF59E0B)
-private val PHONE_BAR = 20.dp    // wide enough for an app's icon
-private val ICON = 14.dp
+private val PHONE_BAR = 40.dp    // wide enough for an app's icon
+private val ICON = 16.dp
 private const val ICON_AFTER_MS = 5 * 60_000L   // five minutes or more on one app shows its icon
 private val PHONE_TEXT = Color(0xFFB45309)
 
