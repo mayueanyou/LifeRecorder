@@ -183,8 +183,9 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp), maxLines = 2,
                         overflow = TextOverflow.Ellipsis)
                 }
-                // Tapping an event selects it on the map and opens what it cost.
-                Timeline(record, day, selected) { i -> selected = i; editing = i }
+                // The first tap shows an event on the map; tapping it again, once
+                // selected, opens its details and costs.
+                Timeline(record, day, selected) { i -> if (selected == i) editing = i else selected = i }
             }
         }
     }

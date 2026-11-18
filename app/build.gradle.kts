@@ -16,8 +16,8 @@ android {
         applicationId = "io.github.mayueanyou.liferecorder"
         minSdk = 26
         targetSdk = 35
-        versionCode = 17
-        versionName = "0.6.4"
+        versionCode = 18
+        versionName = "0.6.5"
     }
 
     // The release key lives outside the repository -- by default in
