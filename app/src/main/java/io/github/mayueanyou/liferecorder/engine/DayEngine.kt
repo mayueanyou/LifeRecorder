@@ -84,17 +84,18 @@ class DayEngine(private val places: PlaceKnowledge) {
                 Stay(it.start, end, it.lat, it.lon, it.fixes, live = now - it.last <= SILENCE_LIMIT_MS)
             } else null
         }
-        val liveJourney = journey?.let { j ->
+        // A trip still under way is cut into drive and walk the same way a
+        // finished one is: parked and walking on, you see the drive done and
+        // the walk going, not one long drive. Only the last piece is live.
+        val liveJourneys = journey?.let { j ->
             if (j.distance >= MIN_JOURNEY_M) {
-                val end = j.lastTime
-                Journey(j.start, end, j.fromLat, j.fromLon, j.lastLat, j.lastLon,
-                    robustMode(j.steps, j.distance, (end - j.start) / 1000.0), j.distance,
-                    j.trace.toList(), live = true)
+                val pieces = segments(j, j.lastTime, j.lastLat, j.lastLon)
+                pieces.dropLast(1) + pieces.last().copy(live = true)
             } else null
-        }
+        }.orEmpty()
         return Result(
             stays + listOfNotNull(liveStay),
-            journeys + listOfNotNull(liveJourney),
+            journeys + liveJourneys,
         )
     }
 
@@ -226,7 +227,7 @@ class DayEngine(private val places: PlaceKnowledge) {
         val startPt = Point(j.fromLat, j.fromLon, j.start)
         val endPt = Point(toLat, toLon, arrivedAt)
         val steps = j.steps.filter { it.time <= arrivedAt }
-        val vehicle = runs(steps) { it.kmh > VEHICLE_KMH }.filter { (a, b) -> sustained(steps, a, b) }
+        val vehicle = vehicleRuns(steps)
         if (vehicle.isEmpty()) return listOf(segment(j, startPt, endPt, steps, null, false, false))
 
         // The vehicle part runs from the first sustained run to the last,
@@ -288,6 +289,28 @@ class DayEngine(private val places: PlaceKnowledge) {
         return out
     }
 
+    /**
+     * The stretches driven. City driving is broken by stop signs, lights and
+     * corners, each cutting a fast run short; judged one by one, those runs
+     * were too short to count, the drive seemed to start minutes late, and the
+     * walk to the car -- now apparently containing driving -- was too fast to
+     * be a walk, so the whole trip became one drive. Fast runs separated by
+     * less than [STOP_MAX_S] of slower going are one drive; a GPS jump while
+     * walking is a lone burst, minutes from any driving, and still too short.
+     */
+    private fun vehicleRuns(steps: List<Step>): List<Pair<Int, Int>> {
+        val merged = ArrayList<Pair<Int, Int>>()
+        for ((a, b) in runs(steps) { it.kmh > VEHICLE_KMH }) {
+            val prev = merged.lastOrNull()
+            if (prev != null && steps.subList(prev.second, a).sumOf { it.seconds } <= STOP_MAX_S) {
+                merged[merged.size - 1] = prev.first to b
+            } else {
+                merged += a to b
+            }
+        }
+        return merged.filter { (a, b) -> sustained(steps, a, b) }
+    }
+
     /** A vehicle run must go somewhere: GPS wobble covers three short steps easily. */
     private fun sustained(steps: List<Step>, a: Int, b: Int): Boolean {
         val run = steps.subList(a, b)
@@ -345,5 +368,6 @@ class DayEngine(private val places: PlaceKnowledge) {
         const val SUSTAINED_MIN_S = 30.0
         const val WALK_SPLIT_MIN_M = 150.0
         const val WALK_SPLIT_MIN_S = 90.0
+        const val STOP_MAX_S = 150.0
     }
 }

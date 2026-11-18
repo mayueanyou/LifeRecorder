@@ -42,6 +42,40 @@ class StillTest {
         assertEquals(1, r.stays.size)              // only A
     }
 
+    @Test fun walkingOnAfterParkingShowsTheDriveDone() {
+        // Drove, parked, and are still walking: the drive is finished, the walk is under way.
+        val fixes = drive().toMutableList()
+        var t = fixes.last().time + 60_000
+        val lat = fixes.last().lat
+        for (k in 1..60) { t += 7_000; fixes += Fix(t, lat, -76.1 + k * 0.00013, 6f) }   // ~10 m every 7 s
+        val r = DayEngine(nowhere).run(fixes, now = t + 10_000)
+        val (car, walk) = r.journeys.takeLast(2)
+        assertEquals(Mode.DRIVING, car.mode)
+        assertFalse(car.live)
+        assertEquals(Mode.WALKING, walk.mode)
+        assertTrue(walk.live)
+    }
+
+    @Test fun stopAndGoDrivingIsOneDrive() {
+        // Short fast runs between stop signs are one drive, starting at the first of them.
+        val out = ArrayList<Fix>()
+        for (i in 0..10) out += Fix(i * min, 43.0, -76.1, 8f)
+        var t = 10 * min
+        var lat = 43.0
+        repeat(120) { lat += 0.00009; t += 7_000; out += Fix(t, lat, -76.1, 8f) }        // walk ~1.2 km at ~5 km/h, then:
+        val drivingFrom = t
+        repeat(6) {                                                                         // six blocks: 100 m fast, then a 40 s stop
+            repeat(5) { lat += 0.0002; t += 2_000; out += Fix(t, lat, -76.1, 6f) }          // ~22 m every 2 s = 40 km/h
+            t += 40_000; lat += 0.00002; out += Fix(t, lat, -76.1, 6f)
+        }
+        repeat(40) { lat += 0.0003; t += 2_000; out += Fix(t, lat, -76.1, 6f) }
+        val r = DayEngine(nowhere).run(out, now = t + 20 * min)
+        val modes = r.journeys.map { it.mode }
+        assertEquals(listOf(Mode.WALKING, Mode.DRIVING), modes)
+        // The drive starts at the first block, not at the long run after the last stop.
+        assertTrue(kotlin.math.abs(r.journeys.last().start - drivingFrom) <= 10_000)
+    }
+
     @Test fun aShortStopIsNotAStay() {
         // Three quiet minutes at a light, then on again: under 5 minutes is never a stay.
         val fixes = drive().toMutableList()
