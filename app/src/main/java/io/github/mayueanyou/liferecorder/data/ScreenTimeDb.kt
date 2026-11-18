@@ -51,20 +51,22 @@ interface ScreenTimeDao {
  * table; places, journeys and costs will join it here.
  */
 @Database(
-    entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class, PlaceRow::class, LookupRow::class],
-    version = 3, exportSchema = true,
+    entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class, PlaceRow::class, LookupRow::class,
+        PaymentRow::class, CostItemRow::class],
+    version = 4, exportSchema = true,
 )
 abstract class LifeDb : RoomDatabase() {
     abstract fun screenTime(): ScreenTimeDao
     abstract fun fixes(): FixDao
     abstract fun places(): PlaceDao
+    abstract fun money(): MoneyDao
 
     companion object {
         @Volatile private var instance: LifeDb? = null
 
         fun get(context: Context): LifeDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, LifeDb::class.java, "life.db")
-                .addMigrations(ADD_FIXES, ADD_PLACES)
+                .addMigrations(ADD_FIXES, ADD_PLACES, ADD_MONEY)
                 .build().also { instance = it }
         }
 
@@ -91,6 +93,24 @@ abstract class LifeDb : RoomDatabase() {
                     "CREATE TABLE IF NOT EXISTS `lookup` (`key` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
                         "`name` TEXT, `exact` INTEGER NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`key`))",
                 )
+            }
+        }
+
+        /** 0.3 -> 0.4: purchases read from notifications, and costs typed in. */
+        private val ADD_MONEY = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `payment` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`time` INTEGER NOT NULL, `pkg` TEXT NOT NULL, `app` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                        "`text` TEXT NOT NULL, `amount` REAL NOT NULL, `currency` TEXT, `merchant` TEXT)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_payment_time` ON `payment` (`time`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `cost_item` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`at` INTEGER NOT NULL, `amount` REAL NOT NULL, `currency` TEXT NOT NULL, `what` TEXT, " +
+                        "`cleared` INTEGER NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_cost_item_at` ON `cost_item` (`at`)")
             }
         }
     }

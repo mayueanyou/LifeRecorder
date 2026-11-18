@@ -32,7 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import io.github.mayueanyou.liferecorder.data.LifeDb
+import io.github.mayueanyou.liferecorder.money.Money
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
@@ -42,25 +42,15 @@ import java.time.format.DateTimeFormatter
 
 /**
  * A month at a glance, opened by tapping the day's name: pick any day instead
- * of stepping back one at a time. Each day shows how many positions it holds,
- * so the days with something recorded stand out.
+ * of stepping back one at a time, each with what it cost.
  */
 @Composable
 fun MonthCalendar(shown: LocalDate, onPick: (LocalDate) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val today = LocalDate.now()
     var month by remember { mutableStateOf(YearMonth.from(shown)) }
-    val counts by produceState(emptyMap<LocalDate, Int>(), month) {
-        value = withContext(Dispatchers.IO) {
-            val dao = LifeDb.get(context).fixes()
-            val zone = ZoneId.systemDefault()
-            (1..month.lengthOfMonth()).map { month.atDay(it) }.filter { it <= today }.associateWith {
-                dao.countBetween(
-                    it.atStartOfDay(zone).toInstant().toEpochMilli(),
-                    it.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli(),
-                )
-            }
-        }
+    val spent by produceState<Money.Month?>(null, month) {
+        value = withContext(Dispatchers.IO) { Money.month(context, month) }
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -68,9 +58,13 @@ fun MonthCalendar(shown: LocalDate, onPick: (LocalDate) -> Unit, onDismiss: () -
             Column(Modifier.padding(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(onClick = { month = month.minusMonths(1) }) { Text("‹", fontSize = 22.sp) }
-                    Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
-                        style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")),
+                            style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        spent?.total?.let {
+                            Text(Money.format(it, spent?.currency), fontSize = 13.sp, color = MONEY_GREEN)
+                        }
+                    }
                     TextButton(onClick = { month = month.plusMonths(1) }, enabled = month < YearMonth.from(today)) {
                         Text("›", fontSize = 22.sp)
                     }
@@ -90,7 +84,7 @@ fun MonthCalendar(shown: LocalDate, onPick: (LocalDate) -> Unit, onDismiss: () -
                         for (i in 0 until 7) {
                             val date = week.getOrNull(i)
                             Box(Modifier.weight(1f).aspectRatio(0.9f)) {
-                                if (date != null) DayCell(date, today, shown, counts[date] ?: 0) {
+                                if (date != null) DayCell(date, today, shown, spent?.byDay?.get(date), spent?.currency) {
                                     onPick(date)
                                 }
                             }
@@ -104,7 +98,7 @@ fun MonthCalendar(shown: LocalDate, onPick: (LocalDate) -> Unit, onDismiss: () -
 }
 
 @Composable
-private fun DayCell(date: LocalDate, today: LocalDate, shown: LocalDate, positions: Int, onPick: () -> Unit) {
+private fun DayCell(date: LocalDate, today: LocalDate, shown: LocalDate, spent: Double?, currency: String?, onPick: () -> Unit) {
     val future = date > today
     val selected = date == shown
     val colors = MaterialTheme.colorScheme
@@ -120,9 +114,12 @@ private fun DayCell(date: LocalDate, today: LocalDate, shown: LocalDate, positio
         verticalArrangement = Arrangement.Center,
     ) {
         Text("${date.dayOfMonth}", fontSize = 14.sp, lineHeight = 16.sp, color = if (selected) colors.onPrimary else colors.onSurface)
-        if (positions > 0) {
-            Text(if (positions >= 1000) "${positions / 1000}k" else "$positions", fontSize = 10.sp, lineHeight = 12.sp,
-                color = if (selected) colors.onPrimary else colors.onSurfaceVariant)
+        if (spent != null) {
+            // Whole units once it is in the hundreds: there is no room for cents.
+            Text(if (spent >= 100) Money.format(spent, currency).substringBefore(".")
+                 else Money.format(spent, currency),
+                fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1,
+                color = if (selected) colors.onPrimary else MONEY_GREEN)
         }
     }
 }

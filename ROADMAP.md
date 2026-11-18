@@ -23,11 +23,13 @@ below.
 - **Place names** — your own places, then OpenStreetMap buildings and streets,
   looked up once per spot and kept.
 
+- **Spending** — card notifications read with a notification listener,
+  each charge matched to one stay; several typed items per event; "No cost";
+  month and day totals and a month calendar.
+
 ## Next, in order
 
-1. **Spending** — card notifications read with a notification listener the
-   user enables, each charge matched to one stay; several cost items per
-   event typed by hand.
+1. **Drive backup** — each day as JSON to your own Google Drive.
 2. **Calendar** (optional) — write stays and journeys to a calendar on the
    phone through Android's own calendar provider, so no Google sign-in is
    needed at all.

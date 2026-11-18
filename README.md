@@ -32,6 +32,18 @@ the nearest address, "near 120 Main Street". Where you parked is named by
 the street. Each spot is looked up once and the name kept; turn lookups off
 in Settings and the app never goes online for names.
 
+**Money.** What you spent, read only from your bank's notifications: each
+card charge goes to the stay you were at when it arrived (15 minutes either
+side, closest wins), never guessed from the merchant's name. The month's
+total and the day's sit at the top; each event shows its cost; tap an event
+to see the bank's charges, add your own items, or mark it "No cost". An item
+you type with the same amount as a bank charge counts once. Only a
+notification that reads as money spent is kept — "payment posted",
+balances, refunds and rewards are not. Banks count by default; any other app
+that sent a purchase is listed in Settings, off until you turn it on (a
+wallet app would count each purchase twice). Tap the day's name for the
+month, with what each day cost.
+
 **Screen time.** For each day: total time on screen, the number of unlocks,
 and every app you used with how long, longest first.
 
@@ -41,7 +53,7 @@ grant. Android keeps that detail for about a week; Life Recorder saves each
 day as it goes, so history lasts longer.
 
 **Settings.** Every permission, one step at a time; recording on and off;
-export of the day's positions; your named places.
+which apps count as money; export of the day's positions; your named places.
 
 Everything stays on the phone. The only things that go online are map tiles
 and, if allowed, the name of a spot.
@@ -63,6 +75,7 @@ echo "sdk.dir=/path/to/Android/sdk" > local.properties
 | Usage access (`PACKAGE_USAGE_STATS`) | Read which app was on screen, and when. Granted by you in Settings; never at install. |
 | Location, including "Allow all the time" | Record where you are while the app is closed. Asked for in steps, the way Android requires. |
 | Foreground service (location), notifications | The ongoing "Recording your day" notice that background location needs. |
+| Notification access | Read card purchases from your bank's notifications. Granted by you in Settings. Only notifications that read as a purchase are kept, on the phone. |
 | Run at startup | Resume recording after the phone restarts, if it was on. |
 | Wake lock, network state | Added by Android's WorkManager library, which saves recent screen time in the background. |
 

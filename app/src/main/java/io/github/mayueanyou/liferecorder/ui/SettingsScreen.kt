@@ -48,6 +48,9 @@ import io.github.mayueanyou.liferecorder.Diagnostics
 import io.github.mayueanyou.liferecorder.data.LifeDb
 import io.github.mayueanyou.liferecorder.data.PlaceRow
 import io.github.mayueanyou.liferecorder.location.Recording
+import io.github.mayueanyou.liferecorder.data.MoneyApp
+import io.github.mayueanyou.liferecorder.money.MoneyApps
+import androidx.compose.ui.unit.sp
 import io.github.mayueanyou.liferecorder.places.Lookups
 import io.github.mayueanyou.liferecorder.screentime.UsageReader
 import kotlinx.coroutines.Dispatchers
@@ -64,7 +67,7 @@ import java.time.format.DateTimeFormatter
 
 private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
 
-/** Everything that is set up once: what Android allows, recording, and your places. */
+/** Everything that is set up once: what Android allows, recording, money, and your places. */
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
@@ -83,6 +86,11 @@ fun SettingsScreen() {
     val background = remember(checks) { Recording.hasBackground(context) }
     val notifications = remember(checks) { Recording.hasNotifications(context) }
     val unrestricted = remember(checks) { batteryUnrestricted(context) }
+    val reading = remember(checks) { MoneyApps.hasAccess(context) }
+    var moneyVersion by remember { mutableIntStateOf(0) }
+    val moneyApps by produceState(emptyList<MoneyApp>(), checks, moneyVersion) {
+        value = withContext(Dispatchers.IO) { LifeDb.get(context).money().apps() }
+    }
 
     val status by produceState(Triple(0, null as Long?, null as Float?), checks) {
         while (true) {
@@ -121,6 +129,38 @@ fun SettingsScreen() {
                 }
                 Step("Battery: Unrestricted — required; without it Android stops recording", unrestricted) {
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                }
+                Step("Notification access — to read card purchases from your bank's notifications", reading) {
+                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+                if (!reading) {
+                    Text("If Android says it is a restricted setting: App info → ⋮ → Allow restricted settings, then try again.",
+                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                    }) { Text("Open App info") }
+                }
+            }
+        }
+        item {
+            Section("Money", "Purchases come only from notifications: each one goes to where you were when it arrived. " +
+                "Only a notification that reads as money spent is kept. Your bank counts; a wallet app would count the same purchase twice.") {
+                if (moneyApps.isEmpty()) {
+                    Text(if (reading) "No purchases read yet — they appear here after your next card payment."
+                        else "Allow notification access above to start.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                moneyApps.forEach { app ->
+                    var on by remember(app.pkg, moneyVersion) { mutableStateOf(MoneyApps.counts(context, app.pkg)) }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(app.app, style = MaterialTheme.typography.titleSmall)
+                            Text("${app.count} purchase${if (app.count == 1) "" else "s"} read" +
+                                if (app.pkg in MoneyApps.BANKS) " · bank" else "",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(checked = on, onCheckedChange = { MoneyApps.set(context, app.pkg, it); on = it; moneyVersion++ })
+                    }
                 }
             }
         }
@@ -191,7 +231,7 @@ fun SettingsScreen() {
                 OutlinedButton(onClick = {
                     scope.launch {
                         val report = withContext(Dispatchers.IO) {
-                            diagnosticsReport(context, usage, foreground, background, notifications, unrestricted, recording)
+                            diagnosticsReport(context, usage, foreground, background, notifications, unrestricted, recording, reading)
                         }
                         context.startActivity(Intent.createChooser(
                             Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, report),
@@ -267,7 +307,7 @@ private fun NameDialog(onDismiss: () -> Unit, onSave: (String, Double) -> Unit) 
 
 private suspend fun diagnosticsReport(
     context: Context, usage: Boolean, foreground: Boolean, background: Boolean,
-    notifications: Boolean, unrestricted: Boolean, recording: Boolean,
+    notifications: Boolean, unrestricted: Boolean, recording: Boolean, reading: Boolean,
 ): String {
     val db = LifeDb.get(context)
     val start = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -278,6 +318,8 @@ private suspend fun diagnosticsReport(
         appendLine("Life Recorder ${info.versionName} (${info.longVersionCode}) on Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("permissions: usage=$usage location=$foreground always=$background notifications=$notifications battery-unrestricted=$unrestricted")
         appendLine("recording on: $recording")
+        appendLine("notification access: $reading; purchases read: " +
+            db.money().apps().joinToString { "${it.app}=${it.count}" + if (MoneyApps.counts(context, it.pkg)) "" else " (off)" }.ifEmpty { "none" })
         appendLine("positions today: ${fixes.countBetween(start, start + DAY_MILLIS)}, all: ${fixes.countBetween(0, Long.MAX_VALUE)}")
         appendLine("last position at: ${last?.let { Instant.ofEpochMilli(it.time) } ?: "none"} accuracy ${last?.accuracy}")
         appendLine("named places: ${db.places().places().size}, looked-up names: ${db.places().lookups().size}")

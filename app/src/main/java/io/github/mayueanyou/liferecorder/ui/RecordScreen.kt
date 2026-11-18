@@ -54,6 +54,9 @@ import io.github.mayueanyou.liferecorder.data.LifeDb
 import io.github.mayueanyou.liferecorder.engine.Fix
 import io.github.mayueanyou.liferecorder.location.Recording
 import io.github.mayueanyou.liferecorder.places.Lookups
+import io.github.mayueanyou.liferecorder.money.EntryMoney
+import io.github.mayueanyou.liferecorder.money.Money
+import java.time.YearMonth
 import android.widget.Toast
 import androidx.compose.runtime.rememberCoroutineScope
 import com.google.android.gms.location.LocationServices
@@ -91,6 +94,10 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
     var record by remember { mutableStateOf<DayRecord?>(null) }
     var selected by remember { mutableStateOf<Int?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
+    // Bumped by a cost change: the day is worked out again without losing the selection.
+    var moneyTick by remember { mutableIntStateOf(0) }
+    var editing by remember { mutableStateOf<Int?>(null) }
+    var month by remember { mutableStateOf<Money.Month?>(null) }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }
     val scope = rememberCoroutineScope()
@@ -105,8 +112,11 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
         }
     }
 
-    LaunchedEffect(day, refresh) {
-        selected = null
+    LaunchedEffect(day) { selected = null; editing = null }
+    LaunchedEffect(YearMonth.from(day), refresh, moneyTick, record?.money?.total) {
+        month = withContext(Dispatchers.IO) { Money.month(context, YearMonth.from(day)) }
+    }
+    LaunchedEffect(day, refresh, moneyTick) {
         while (true) {
             val built = withContext(Dispatchers.IO) { DayBuilder.build(context, day) }
             record = built
@@ -122,7 +132,14 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
         }
     }
 
+    editing?.let { i ->
+        val entry = record?.entries?.getOrNull(i)
+        if (entry == null) editing = null
+        else CostEditor(entry, record?.money?.perEntry?.get(i), onChanged = { moneyTick++ }, onDismiss = { editing = null })
+    }
+
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        MonthBar(day, month, record?.takeIf { it.day == day }?.money, onDay = { day = it })
         DayHeader(day, record, onDay = { day = it }, onLocate = {
             scope.launch {
                 val fix = currentPosition(context) ?: lastEver
@@ -154,7 +171,15 @@ fun RecordScreen(onOpenSettings: () -> Unit) {
                         EmptyDay(day, Recording.wanted(context), onOpenSettings)
                     }
                 }
-                Timeline(record, day, selected) { i -> selected = if (selected == i) null else i }
+                record?.money?.unplaced?.takeIf { it.isNotEmpty() && record?.day == day }?.let { loose ->
+                    Text("Not matched to a place: " + loose.joinToString(", ") {
+                        (it.payment.merchant ?: it.payment.app) + " " + Money.format(it.payment.amount, it.payment.currency)
+                    }, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp), maxLines = 2,
+                        overflow = TextOverflow.Ellipsis)
+                }
+                // Tapping an event selects it on the map and opens what it cost.
+                Timeline(record, day, selected) { i -> selected = i; editing = i }
             }
         }
     }
@@ -184,6 +209,28 @@ private fun EmptyDay(day: LocalDate, recording: Boolean, onOpenSettings: () -> U
     }
 }
 
+/** The month's spending, and the day's beneath it -- the top of Portal's Record app. Tap for the calendar. */
+@Composable
+private fun MonthBar(day: LocalDate, month: Money.Month?, money: io.github.mayueanyou.liferecorder.money.DayMoney?, onDay: (LocalDate) -> Unit) {
+    var picking by remember { mutableStateOf(false) }
+    if (picking) MonthCalendar(day, onPick = { picking = false; onDay(it) }, onDismiss = { picking = false })
+    Row(
+        Modifier.fillMaxWidth().clickable { picking = true }.padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(day.format(DateTimeFormatter.ofPattern("MMMM yyyy")), fontSize = 14.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(10.dp))
+        Text(month?.total?.let { Money.format(it, month.currency) } ?: "—", fontSize = 22.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (month?.total != null) MONEY_GREEN else MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.weight(1f))
+        month?.byDay?.size?.takeIf { it > 0 }?.let {
+            Text("over $it day${if (it == 1) "" else "s"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
 @Composable
 private fun DayHeader(day: LocalDate, record: DayRecord?, onDay: (LocalDate) -> Unit, onLocate: () -> Unit) {
     val today = LocalDate.now()
@@ -192,7 +239,6 @@ private fun DayHeader(day: LocalDate, record: DayRecord?, onDay: (LocalDate) -> 
         today.minusDays(1) -> "Yesterday"
         else -> day.format(DateTimeFormatter.ofPattern("EEE, MMM d"))
     }
-    val places = record?.entries?.count { it is Entry.StayEntry } ?: 0
     var picking by remember { mutableStateOf(false) }
     if (picking) MonthCalendar(day, onPick = { picking = false; onDay(it) }, onDismiss = { picking = false })
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -204,8 +250,11 @@ private fun DayHeader(day: LocalDate, record: DayRecord?, onDay: (LocalDate) -> 
         TextButton(onClick = { onDay(day.plusDays(1)) }, enabled = day < today) { Text("›", fontSize = 22.sp) }
         TextButton(onClick = onLocate) { Text("◎", fontSize = 22.sp) }
         Spacer(Modifier.weight(1f))
-        Text(if (record == null) "" else "$places place${if (places == 1) "" else "s"}",
-            color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 12.dp))
+        val money = record?.takeIf { it.day == day }?.money
+        Text(money?.total?.let { Money.format(it, money.currency) + if (money.mixed) " (mixed)" else "" } ?: "—",
+            fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+            color = if (money?.total != null) MONEY_GREEN else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 14.dp))
     }
 }
 
@@ -268,14 +317,14 @@ private fun Timeline(record: DayRecord?, day: LocalDate, selected: Int?, onTap: 
             blocks.forEach { b ->
                 val e = entries[b.index]
                 val number = if (e is Entry.StayEntry) (++stayNo).toString() else null
-                EventBlock(e, number, b, b.index == selected) { onTap(b.index) }
+                EventBlock(e, number, b, b.index == selected, record?.money?.perEntry?.get(b.index)) { onTap(b.index) }
             }
         }
     }
 }
 
 @Composable
-private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean, onTap: () -> Unit) {
+private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean, money: EntryMoney?, onTap: () -> Unit) {
     val tiny = block.height < 40.dp
     val short = block.height < 72.dp
     val (edge, fill) = when (entry) {
@@ -317,13 +366,21 @@ private fun EventBlock(entry: Entry, number: String?, block: Block, on: Boolean,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            Text(spellMinutes((entry.end - entry.start) / 60_000), fontSize = if (tiny) 12.sp else 14.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(horizontalAlignment = Alignment.End) {
+                money?.total?.let {
+                    Text(Money.format(it, money.currency), fontSize = if (tiny) 12.sp else 15.sp,
+                        fontWeight = FontWeight.SemiBold, color = MONEY_GREEN)
+                }
+                if (!tiny || money?.total == null) {
+                    Text(spellMinutes((entry.end - entry.start) / 60_000), fontSize = if (tiny) 12.sp else 14.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
         }
     }
 }
 
-private fun title(e: Entry) = when (e) {
+internal fun title(e: Entry) = when (e) {
     is Entry.StayEntry -> (if (e.stay.live) "▸ " else "") + (e.stay.place ?: "Unknown place")
     is Entry.JourneyEntry -> (if (e.journey.live) "▸ " else "") + "${e.journey.fromPlace} → ${e.journey.toPlace}"
 }
@@ -334,10 +391,10 @@ private fun kind(e: Entry) = when (e) {
 }
 
 private val CLOCK = DateTimeFormatter.ofPattern("h:mm a", Locale.getDefault()).withZone(ZoneId.systemDefault())
-private fun clock(t: Long) = CLOCK.format(Instant.ofEpochMilli(t))
+internal fun timeOfDay(t: Long) = CLOCK.format(Instant.ofEpochMilli(t))
 
 private fun details(e: Entry): String {
-    val span = "${clock(e.start)} – ${clock(e.end)}"
+    val span = "${timeOfDay(e.start)} – ${timeOfDay(e.end)}"
     return when (e) {
         is Entry.StayEntry -> span + if (!e.stay.exact && e.stay.placeSource == "osm") " · approximate" else ""
         is Entry.JourneyEntry -> {

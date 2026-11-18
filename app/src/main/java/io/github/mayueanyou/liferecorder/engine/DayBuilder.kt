@@ -2,6 +2,9 @@ package io.github.mayueanyou.liferecorder.engine
 
 import android.content.Context
 import io.github.mayueanyou.liferecorder.data.LifeDb
+import io.github.mayueanyou.liferecorder.money.DayMoney
+import io.github.mayueanyou.liferecorder.money.MoneyApps
+import io.github.mayueanyou.liferecorder.money.Pricing
 import io.github.mayueanyou.liferecorder.places.Places
 import java.time.LocalDate
 import java.time.ZoneId
@@ -16,6 +19,7 @@ class DayRecord(
     val missingBuildings: List<Pair<Double, Double>>,
     val missingStreets: List<Pair<Double, Double>>,
     val lastFix: Fix?,
+    val money: DayMoney = DayMoney.NONE,
 )
 
 /**
@@ -76,7 +80,23 @@ object DayBuilder {
 
         val entries = (stays.map { Entry.StayEntry(it) } + journeys.map { Entry.JourneyEntry(it) })
             .sortedWith(compareBy<Entry>({ it.start }, { it.end }))
-        return DayRecord(day, entries, missingBuildings, missingStreets, fixes.lastOrNull())
+
+        val moneyDao = LifeDb.get(context).money()
+        val payments = moneyDao.payments(dayStart, dayEnd).filter { MoneyApps.counts(context, it.pkg) }
+        val money = Pricing.price(entries, payments, moneyDao.items(dayStart, dayEnd), now)
+        // A shop the map cannot name is still named on the card -- but only by a
+        // charge made inside the stay: one matched in the minutes after it may
+        // be from the next shop you walked to.
+        money.perEntry.forEach { (i, m) ->
+            val stay = (entries[i] as? Entry.StayEntry)?.stay ?: return@forEach
+            if (stay.place != "Unknown place") return@forEach
+            m.charges.firstOrNull { it.outsideByMin == 0 && it.payment.merchant != null }?.let {
+                stay.place = it.payment.merchant
+                stay.placeSource = "card"
+                stay.exact = true
+            }
+        }
+        return DayRecord(day, entries, missingBuildings, missingStreets, fixes.lastOrNull(), money)
     }
 
     private fun endName(places: Places, stays: List<Stay>, transfer: Boolean, lat: Double, lon: Double,
