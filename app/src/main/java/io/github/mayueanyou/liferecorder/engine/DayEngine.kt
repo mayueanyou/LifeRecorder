@@ -67,8 +67,16 @@ class DayEngine(private val places: PlaceKnowledge) {
         for (fix in fixes) observe(fix)
         val c = candidate
         val liveStay = c?.let {
-            val seconds = (it.last - it.start) / 1000.0
+            // Where you are now, the quiet since the last position counts as
+            // time here: the phone records a position only once it has moved
+            // 10 m, so sitting still sends nothing, and timing the stay by its
+            // positions alone kept a long stay from ever reaching 8 minutes.
+            // (Leaving is still timed by positions -- walking out sends them.)
+            val until = if (now > it.last && now - it.last <= SILENCE_LIMIT_MS) now else it.last
+            val seconds = (until - it.start) / 1000.0
             if (isStay(it, seconds)) {
+                // Confirmed only now: the journey that brought you here is over.
+                if (!it.confirmed) finishJourney(it.start, it.lat, it.lon)
                 // Silence is not absence: a still phone has nothing to report,
                 // so a stay runs on to now unless the phone has been quiet for
                 // longer than any ordinary day allows.
