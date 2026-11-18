@@ -12,8 +12,9 @@ import java.time.LocalDate
  * the app's own copy after that.
  *
  * Android keeps per-app foreground events for roughly a week. Each time a day
- * is read live it is saved, and a background job saves the last few days
- * every few hours, so history outlasts Android's window.
+ * is read live it is saved, and a background job saves the last week every
+ * few hours, so history outlasts Android's window. Nothing saved is ever
+ * deleted: every day stays on the phone for good.
  */
 class ScreenTimeStore(context: Context) {
     private val reader = UsageReader(context)
@@ -26,10 +27,8 @@ class ScreenTimeStore(context: Context) {
         if (age < 0) return null
         if (age <= LIVE_DAYS && reader.hasAccess()) {
             val live = reader.read(day)
-            // An empty live read of an older day means Android no longer has
-            // it -- keep whatever was saved rather than overwrite it.
-            if (live.apps.isNotEmpty() || age == 0L) save(live)
-            if (live.apps.isNotEmpty() || age == 0L) return live
+            if (age == 0L) { save(live); return live }
+            if (live.apps.isNotEmpty()) save(live)
         }
         return saved(day)
     }
@@ -44,8 +43,22 @@ class ScreenTimeStore(context: Context) {
         }
     }
 
+    /**
+     * Never makes a past day smaller. At the edge of its week Android forgets a
+     * day from the morning on, and a fresh read then holds less than the copy
+     * saved while it still had it all; the saved copy stands. (Today only ever
+     * grows, so it is always written.)
+     */
     private suspend fun save(day: DayScreenTime) {
         val key = day.day.toString()
+        val kept = dao.day(key)
+        if (kept != null && day.day != LocalDate.now() && day.totalMillis < kept.totalMillis) {
+            // A day saved before sessions were kept still gains whatever sessions Android has left.
+            if (day.sessions.isNotEmpty() && dao.sessions(key).isEmpty()) {
+                dao.upsertSessions(day.sessions.map { ScreenSessionRow(key, it.packageName, it.label, it.start, it.end) })
+            }
+            return
+        }
         dao.replace(
             ScreenDayRow(key, day.totalMillis, day.unlocks, System.currentTimeMillis()),
             day.apps.map { ScreenAppRow(key, it.packageName, it.label, it.millis) },

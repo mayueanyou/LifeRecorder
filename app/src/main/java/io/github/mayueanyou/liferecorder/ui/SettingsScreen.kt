@@ -360,7 +360,12 @@ fun SettingsScreen() {
             }
         }
         item {
-            Text("Life Recorder · everything is kept on this phone.",
+            // Kept for good -- nothing is ever deleted -- so say how much room that takes.
+            val size = remember(checks) {
+                listOf("life.db", "life.db-wal", "life.db-shm").sumOf { context.getDatabasePath(it).length() }
+            }
+            Text("Life Recorder · everything is kept on this phone, for good · " +
+                String.format(java.util.Locale.getDefault(), "%.1f MB", size / 1_048_576.0) + " used",
                 color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
         }
     }
