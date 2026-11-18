@@ -35,17 +35,17 @@ class StillTest {
         assertEquals(Mode.DRIVING, r.journeys.last().mode)
     }
 
-    @Test fun notYetEightMinutes() {
+    @Test fun notYetFiveMinutes() {
         val fixes = drive()
-        val r = DayEngine(nowhere).run(fixes, now = fixes.last().time + 5 * min)
+        val r = DayEngine(nowhere).run(fixes, now = fixes.last().time + 3 * min)
         assertTrue(r.journeys.last().live)        // could be a red light; still travelling
         assertEquals(1, r.stays.size)              // only A
     }
 
     @Test fun aShortStopIsNotAStay() {
-        // Five quiet minutes in traffic, then on again: under 8 minutes is never a stay.
+        // Three quiet minutes at a light, then on again: under 5 minutes is never a stay.
         val fixes = drive().toMutableList()
-        var t = fixes.last().time + 5 * min
+        var t = fixes.last().time + 3 * min
         for (k in 61..90) { t += 10_000; fixes += Fix(t, 43.0 + k * 0.0009, -76.1, 8f) }
         val r = DayEngine(nowhere).run(fixes, now = t + 60_000)
         assertEquals(1, r.stays.size)

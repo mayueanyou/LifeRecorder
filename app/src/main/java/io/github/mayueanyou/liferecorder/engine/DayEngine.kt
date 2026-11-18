@@ -70,7 +70,7 @@ class DayEngine(private val places: PlaceKnowledge) {
             // Where you are now, the quiet since the last position counts as
             // time here: the phone records a position only once it has moved
             // 10 m, so sitting still sends nothing, and timing the stay by its
-            // positions alone kept a long stay from ever reaching 8 minutes.
+            // positions alone kept a long stay from ever becoming one.
             // (Leaving is still timed by positions -- walking out sends them.)
             val until = if (now > it.last && now - it.last <= SILENCE_LIMIT_MS) now else it.last
             val seconds = (until - it.start) / 1000.0
@@ -330,7 +330,7 @@ class DayEngine(private val places: PlaceKnowledge) {
         const val RADIUS_M = 120.0
         const val ACCURACY_LIMIT_M = 50f
         const val JUMP_KMH = 250.0
-        const val MIN_DWELL_MS = 8 * 60 * 1000L
+        const val MIN_DWELL_MS = 5 * 60 * 1000L
         const val PAUSE_MAX_MS = 20 * 60 * 1000L
         const val STILL_M_PER_MIN = 10.0
         const val CENTRE_AFTER_MS = 3 * 60 * 1000L

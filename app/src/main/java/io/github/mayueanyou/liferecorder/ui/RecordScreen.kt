@@ -199,7 +199,7 @@ private fun EmptyDay(day: LocalDate, recording: Boolean, onOpenSettings: () -> U
                     }
                     day == LocalDate.now() -> {
                         Text("Nothing recorded yet today", style = MaterialTheme.typography.titleMedium)
-                        Text("Stays appear after 8 minutes in one place; journeys as you travel.",
+                        Text("Stays appear after 5 minutes in one place; journeys as you travel.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                     }
                     else -> Text("Nothing was recorded on this day.", color = MaterialTheme.colorScheme.onSurfaceVariant)
