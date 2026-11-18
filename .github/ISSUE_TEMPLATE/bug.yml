@@ -1,0 +1,35 @@
+name: Report a problem
+description: Something in Life Recorder is not working the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time — every report makes the app better.
+        **Please don't post your real locations, addresses or card details here**; this page is public.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see instead? A screenshot helps (crop out anything private).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How can I see it happen?
+      description: The steps that lead to it, if you know them.
+      placeholder: |
+        1. Open Settings
+        2. Tap …
+  - type: input
+    id: phone
+    attributes:
+      label: Phone and Android version
+      placeholder: Pixel 9, Android 17
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report (optional)
+      description: In the app, Settings › Share diagnostics. It contains no locations — paste it here.
+      render: text

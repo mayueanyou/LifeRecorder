@@ -1,0 +1,16 @@
+name: Suggest something
+description: An idea, a wish, or something you would like Life Recorder to do differently.
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What would it let you see or do? Why would it help you?
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
+      description: How you use the app today, an example, a sketch — anything that helps.

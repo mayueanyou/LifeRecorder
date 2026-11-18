@@ -1,0 +1,46 @@
+name: My bank's purchases are not read right
+description: Purchases from your bank (or wallet, or bank texts/emails) are missed, counted wrong, or something that is not a purchase is counted.
+labels: [money]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Life Recorder reads purchases from the notifications your bank sends. Banks word them differently,
+        so an example of yours lets the app learn to read it — for you and everyone who banks there.
+
+        **Please mask it before pasting — this page is public:**
+        amounts → `99.99`, card or account digits → `9999`, shop names → `XXXX`, your name → `NAME`.
+        For example: `Credit card charge $99.99 Credit card 9999 XXXX XXXX`
+  - type: input
+    id: app
+    attributes:
+      label: Which app sends it?
+      description: Your bank's app, a wallet, Gmail, Messages… and the country.
+      placeholder: Chase (USA)
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What goes wrong?
+      options:
+        - A purchase is not counted
+        - The amount or currency is wrong
+        - Something that is not a purchase is counted
+        - The same purchase is counted twice
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: The notification, masked
+      description: Its title and text as they appear, with amounts, digits and names masked as above.
+      placeholder: "Title: Purchase alert — Text: You spent $99.99 at XXXX with card 9999"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else?
