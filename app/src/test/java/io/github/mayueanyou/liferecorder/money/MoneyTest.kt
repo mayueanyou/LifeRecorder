@@ -67,6 +67,17 @@ class MoneyTest {
         assertNull(r("Bank", "Reembolso de 20,00 € recibido"))
     }
 
+    @Test fun shopNamesFromBankTexts() {
+        fun shop(text: String, title: String = "73981") = Reading.merchant("Messages", title, text, useTitle = false)
+        assertEquals("Costco Gas", shop("BofA: Your credit card ending in 9999 was charged \$45.15 at COSTCO GAS on 11/18."))
+        assertEquals("Starbucks", shop("Chase: You made a \$25.00 transaction with STARBUCKS on Nov 18, 2026 at 9:30 AM ET."))
+        assertEquals("Starbucks", shop("\$12.40 @ STARBUCKS"))
+        assertEquals("Amazon", shop("Rs 500.00 spent on card XX9999 at AMAZON on 18-11-26. Avl bal Rs 2000"))
+        assertNull(shop("Alert: purchase of \$9.99 on card 9999"))          // no shop named -- and not the sender either
+        // A wallet still names the shop from its title.
+        assertEquals("McDonalds", Reading.merchant("Google Wallet", "McDonalds 10238", "\$10.00 with BofA Visa ••1234"))
+    }
+
     @Test fun anAmountAtAShopIsAPurchase() {
         assertEquals(Reading.Kind.PURCHASE, Reading.read("Chase", "$25.00 at STARBUCKS")!!.kind)
         assertEquals(Reading.Kind.MAYBE, Reading.read("Chase", "Account alert: $25.00")!!.kind)

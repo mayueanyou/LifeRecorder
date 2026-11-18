@@ -83,7 +83,17 @@ object Reading {
         RegexOption.IGNORE_CASE)
 
     // "... $16.19 at KFC", "... 12,50 € chez Monoprix" -- the merchant after the word for "at".
-    private val AT_MERCHANT = Regex("(?iu)\\d\\s*(?:\\S{0,3}\\s+)?(?:at|to|en|em|chez|bei|presso|bij)\\s+(?<merchant>[\\p{L}\\d][^.,;\\n]{1,40})")
+    private val AT_MERCHANT = Regex("(?iu)\\d\\s*(?:\\S{0,3}\\s+)?(?:at|to|en|em|chez|bei|presso|bij|@)\\s+(?<merchant>\\p{L}[^.,;\\n]{1,40})")
+
+    // Banks' texts name the merchant in capitals after "at", "with", "@":
+    // "...a $25.00 transaction with STARBUCKS on Nov 18".
+    private val CAPS_MERCHANT = Regex("(?u)(?:(?<![\\p{L}])(?:at|with|to|from|en|em|chez|bei|presso|bij)(?![\\p{L}])|@)\\s+(?<merchant>\\p{Lu}[\\p{Lu}\\p{N}&'.*#\\- ]{1,40})")
+
+    // Words that end a merchant's name: "COSTCO GAS on 11/18", "STARBUCKS ON NOV 18".
+    private val MERCHANT_END = Regex("(?i)\\s+(?:on|for|with|using|via|el|le|am|il|op|ref|avl|bal)(?:\\s+|$)")
+
+    // A "merchant" that is really the card or the sentence: "was charged...", "Visa 1234".
+    private val NOT_MERCHANT = Regex("(?i)^(?:was|is|has|have|been|charged|used|made|ending)\\b|\\b(?:card|visa|mastercard|debit|credit|account|a/c|ending)\\b|•|\\*\\*")
 
     // A trailing store number, bare or after a letter or #: "McDonalds 10238", "KFC G135340", "TOPS #362".
     private val STORE_NUMBER = Regex("[\\s#*]*\\b[A-Z]?\\d{3,}\\b\\s*$")
@@ -141,12 +151,22 @@ object Reading {
     fun looksLikeSpending(title: String, text: String): Boolean =
         read(title, text)?.kind == Kind.PURCHASE
 
-    /** Who was paid, if the notification says. */
-    fun merchant(app: String, title: String, text: String): String? {
-        AFTER_CARD.find(text)?.let { return tidy(it.groups["merchant"]!!.value) }
-        AT_MERCHANT.find(text)?.let {
-            return tidy(it.groups["merchant"]!!.value.split(Regex("(?i)\\s+(?:on|for|with|el|le|am|il|op|via)\\s+"))[0])
+    /**
+     * Who was paid, if the notification says. [useTitle] is false for text
+     * messages and email, whose title is the sender -- "73981", "BofA" -- not
+     * the shop.
+     */
+    fun merchant(app: String, title: String, text: String, useTitle: Boolean = true): String? {
+        fun clean(raw: String): String? {
+            val cut = MERCHANT_END.split(raw.trim(), 2)[0].trim().removePrefix("@").trim()
+            return if (cut.length < 2 || NOT_MERCHANT.containsMatchIn(cut)) null else tidy(cut)
         }
+        AT_MERCHANT.find(text)?.let { m -> clean(m.groups["merchant"]!!.value)?.let { return it } }
+        CAPS_MERCHANT.find(text)?.let { m -> clean(m.groups["merchant"]!!.value)?.let { return it } }
+        AFTER_CARD.find(text)?.let { m ->
+            clean(m.groups["merchant"]!!.value.replace(Regex("(?i)^(?:at|with|@|for)\\s+"), ""))?.let { return it }
+        }
+        if (!useTitle) return null
         val t = title.trim()
         // Otherwise the title, which is where wallets put it -- unless it is only the app's name.
         if (t.isNotEmpty() && !t.equals(app, ignoreCase = true) && amountIn(t) == null &&

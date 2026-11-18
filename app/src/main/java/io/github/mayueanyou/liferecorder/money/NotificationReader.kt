@@ -70,7 +70,8 @@ class NotificationReader : NotificationListenerService() {
         // The time it says it happened, unless that is nonsense; otherwise when it was posted.
         val time = n.`when`.takeIf { kotlin.math.abs(it - sbn.postTime) < 24 * 3600_000L } ?: sbn.postTime
         if (dao.countSame(sbn.packageName, text, time, SAME_WITHIN_MS) > 0) return
-        val merchant = Reading.merchant(app, title, text)
+        val merchant = Reading.merchant(app, title, text,
+            useTitle = KnownApps.role(sbn.packageName) !in setOf(Role.MESSAGES, Role.EMAIL))
         dao.insertPayment(
             PaymentRow(
                 time = time, pkg = sbn.packageName, app = app, title = title, text = text,

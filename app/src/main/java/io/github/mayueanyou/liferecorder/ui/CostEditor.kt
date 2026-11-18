@@ -44,6 +44,8 @@ import io.github.mayueanyou.liferecorder.money.EntryMoney
 import io.github.mayueanyou.liferecorder.money.Money
 import io.github.mayueanyou.liferecorder.money.MoneyApps
 import io.github.mayueanyou.liferecorder.money.Reading
+import io.github.mayueanyou.liferecorder.money.KnownApps
+import io.github.mayueanyou.liferecorder.money.Role
 import io.github.mayueanyou.liferecorder.data.MoneyRuleRow
 import io.github.mayueanyou.liferecorder.data.PaymentRow
 import androidx.compose.material3.AlertDialog
@@ -154,12 +156,19 @@ fun CostEditor(entry: Entry, money: EntryMoney?, screen: List<AppSession>, onCha
                             },
                             c.alsoFrom.takeIf { it.isNotEmpty() }?.let { "also from ${it.joinToString()} — counted once" },
                         ).joinToString(" · ").ifEmpty { null }
+                        // Read again with today's rules: a charge stored before they knew its bank's wording gains its shop.
+                        val shop = p.merchant ?: Reading.merchant(p.app, p.title, p.text,
+                            useTitle = KnownApps.role(p.pkg) !in setOf(Role.MESSAGES, Role.EMAIL))
                         Line(
-                            left = (p.merchant ?: MoneyApps.name(p.pkg, p.app)) + " · " + timeOfDay(p.time),
+                            left = (shop ?: MoneyApps.name(p.pkg, p.app)) + " · " + timeOfDay(p.time),
                             sub = note,
                             right = Money.format(p.amount, p.currency),
                             struck = cleared || c.sameAsItem,
                         )
+                        // The notification's own words, so what it was for is never a mystery.
+                        Text("“" + listOf(p.title, p.text).filter { it.isNotBlank() }.joinToString(" — ") + "” · " +
+                            MoneyApps.name(p.pkg, p.app), fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = { notPurchase = p }, contentPadding = PaddingValues(0.dp)) {
                             Text("Not a purchase", fontSize = 12.sp)
                         }
