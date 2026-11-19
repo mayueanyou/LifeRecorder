@@ -33,6 +33,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,6 +52,8 @@ import io.github.mayueanyou.liferecorder.money.Reading
 import io.github.mayueanyou.liferecorder.money.KnownApps
 import io.github.mayueanyou.liferecorder.money.Role
 import io.github.mayueanyou.liferecorder.data.MoneyRuleRow
+import io.github.mayueanyou.liferecorder.data.PlaceRow
+import io.github.mayueanyou.liferecorder.places.Places
 import io.github.mayueanyou.liferecorder.data.PaymentRow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,6 +63,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 val MONEY_GREEN = Color(0xFF22C55E)
+
+/** A place you name from a stay covers this much around it -- a building, not a block. */
+private const val OWN_PLACE_RADIUS_M = 60.0
 
 /**
  * What a stay or journey cost, opened by tapping it: the bank's charges (read
@@ -108,11 +118,54 @@ fun CostEditor(entry: Entry, money: EntryMoney?, screen: List<AppSession>, onCha
         )
     }
 
+    // Your name for a stay: kept for good, and used whenever you are there again.
+    var renaming by remember { mutableStateOf(false) }
+    if (renaming && entry is Entry.StayEntry) {
+        val stay = entry.stay
+        // The current name, selected: typing replaces it, a tap keeps it to edit.
+        var name by remember {
+            val now = stay.place?.takeIf { it != "Unknown place" }.orEmpty()
+            mutableStateOf(TextFieldValue(now, TextRange(0, now.length)))
+        }
+        val focus = remember { FocusRequester() }
+        LaunchedEffect(Unit) { focus.requestFocus() }
+        AlertDialog(
+            onDismissRequest = { renaming = false },
+            title = { Text("Name this place") },
+            text = {
+                Column {
+                    OutlinedTextField(value = name, onValueChange = { name = it }, singleLine = true, label = { Text("Name") },
+                        modifier = Modifier.focusRequester(focus))
+                    Spacer(Modifier.height(6.dp))
+                    Text("Used every time you are here, on every day.", fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = name.text.isNotBlank(), onClick = {
+                    renaming = false
+                    val chosen = name.text.trim()
+                    change {
+                        val places = LifeDb.get(context).places()
+                        // Already one of yours here: rename it. Otherwise this spot becomes one.
+                        val mine = Places.load(context).ownPlace(stay.lat, stay.lon)
+                        if (mine != null) places.rename(mine.id, chosen)
+                        else places.upsert(PlaceRow(chosen, stay.lat, stay.lon, OWN_PLACE_RADIUS_M))
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { renaming = false }) { Text("Cancel") } },
+        )
+    }
+
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
-                Text(title(entry).removePrefix("▸ "), style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title(entry).removePrefix("▸ "), style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    if (entry is Entry.StayEntry) TextButton(onClick = { renaming = true }) { Text("Rename") }
+                }
                 Text("${timeOfDay(entry.start)} – ${timeOfDay(entry.end)}", fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(10.dp))

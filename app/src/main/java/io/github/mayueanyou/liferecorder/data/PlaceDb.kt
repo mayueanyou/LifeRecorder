@@ -6,13 +6,17 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Upsert
 
-/** A place you named yourself. Always wins over anything looked up. */
+/**
+ * A place you named yourself. Always wins over anything looked up. Two
+ * places may share a name -- two cafés of one chain -- so each has an id.
+ */
 @Entity(tableName = "place")
 data class PlaceRow(
-    @PrimaryKey val name: String,
+    val name: String,
     val latitude: Double,
     val longitude: Double,
     val radius: Double,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
 )
 
 /**
@@ -33,7 +37,8 @@ data class LookupRow(
 interface PlaceDao {
     @Query("SELECT * FROM place ORDER BY name") suspend fun places(): List<PlaceRow>
     @Upsert suspend fun upsert(place: PlaceRow)
-    @Query("DELETE FROM place WHERE name = :name") suspend fun delete(name: String)
+    @Query("DELETE FROM place WHERE id = :id") suspend fun delete(id: Long)
+    @Query("UPDATE place SET name = :name WHERE id = :id") suspend fun rename(id: Long, name: String)
 
     @Query("SELECT * FROM lookup") suspend fun lookups(): List<LookupRow>
     @Upsert suspend fun upsertLookup(row: LookupRow)

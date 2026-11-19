@@ -21,17 +21,40 @@ import java.util.Locale
  * Lookups are done once per spot and kept (see [Lookups]); everything here
  * reads only what is already on the phone.
  */
-class Places private constructor(private val own: List<PlaceRow>, private val looked: Map<String, LookupRow>) {
+class Places internal constructor(private val own: List<PlaceRow>, private val looked: Map<String, LookupRow>) {
 
     data class Name(val name: String, val source: String, val exact: Boolean)
+
+    // Every lookup by kind, with the spot it was made for, so a name can be found by distance.
+    private class Spot(val lat: Double, val lon: Double, val row: LookupRow)
+    private val spots: Map<String, List<Spot>> = looked.values.mapNotNull { row ->
+        val (lat, lon) = row.key.substringAfter(':').split(',').map { it.toDoubleOrNull() ?: return@mapNotNull null }
+        row.kind to Spot(lat, lon, row)
+    }.groupBy({ it.first }, { it.second })
+
+    /**
+     * The lookup for a spot: its own, else the nearest named one within
+     * [SAME_PLACE_M]. A stay's centre drifts a few metres as positions come in
+     * and the day is worked out again; keyed only by its exact centre, a
+     * place that had a name lost it -- "Unknown place" until it was looked up
+     * again, and sometimes then a different name. Once found, a name stays.
+     */
+    private fun near(kind: String, lat: Double, lon: Double): LookupRow? {
+        val exact = looked[key(kind, lat, lon)]
+        if (exact?.name != null) return exact
+        return spots[kind].orEmpty().filter { it.row.name != null }
+            .map { it to Geo.metres(lat, lon, it.lat, it.lon) }
+            .filter { it.second <= SAME_PLACE_M }
+            .minByOrNull { it.second }?.first?.row ?: exact
+    }
 
     fun ownPlace(lat: Double, lon: Double): PlaceRow? =
         own.filter { Geo.metres(lat, lon, it.latitude, it.longitude) <= it.radius }
             .minByOrNull { Geo.metres(lat, lon, it.latitude, it.longitude) }
 
     /** What a spot was found to be called -- see [Lookups.spotName]. */
-    fun building(lat: Double, lon: Double): LookupRow? = looked[key("spot", lat, lon)]
-    fun street(lat: Double, lon: Double): LookupRow? = looked[key("street", lat, lon)]
+    fun building(lat: Double, lon: Double): LookupRow? = near("spot", lat, lon)
+    fun street(lat: Double, lon: Double): LookupRow? = near("street", lat, lon)
 
     fun stayName(lat: Double, lon: Double): Name? {
         ownPlace(lat, lon)?.let { return Name(it.name, "yours", true) }
@@ -49,13 +72,16 @@ class Places private constructor(private val own: List<PlaceRow>, private val lo
 
     /** Whether a spot still needs looking up. */
     fun missing(kind: String, lat: Double, lon: Double) =
-        ownPlace(lat, lon) == null && key(kind, lat, lon) !in looked
+        ownPlace(lat, lon) == null && key(kind, lat, lon) !in looked && near(kind, lat, lon)?.name == null
 
     companion object {
         suspend fun load(context: Context): Places {
             val dao = LifeDb.get(context).places()
             return Places(dao.places(), dao.lookups().associateBy { it.key })
         }
+
+        /** How far a stay's centre may drift and still be the place already named. */
+        const val SAME_PLACE_M = 50.0
 
         /** ~11 m of coordinate: standing still reuses one lookup. */
         fun key(kind: String, lat: Double, lon: Double) =

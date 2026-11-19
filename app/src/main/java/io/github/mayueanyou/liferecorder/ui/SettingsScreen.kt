@@ -311,7 +311,7 @@ fun SettingsScreen() {
                 Button(onClick = { naming = true }, enabled = status.second != null) { Text("Name this place") }
             }
         }
-        items(places, key = { it.name }) { p ->
+        items(places, key = { it.id }) { p ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(p.name, style = MaterialTheme.typography.bodyLarge)
@@ -319,7 +319,7 @@ fun SettingsScreen() {
                 }
                 TextButton(onClick = {
                     scope.launch {
-                        withContext(Dispatchers.IO) { LifeDb.get(context).places().delete(p.name) }
+                        withContext(Dispatchers.IO) { LifeDb.get(context).places().delete(p.id) }
                         placesVersion++
                     }
                 }) { Text("Remove") }

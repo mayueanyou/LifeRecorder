@@ -72,7 +72,7 @@ interface ScreenTimeDao {
 @Database(
     entities = [ScreenDayRow::class, ScreenAppRow::class, FixRow::class, PlaceRow::class, LookupRow::class,
         PaymentRow::class, CostItemRow::class, ScreenSessionRow::class, MoneyRuleRow::class],
-    version = 6, exportSchema = true,
+    version = 7, exportSchema = true,
 )
 abstract class LifeDb : RoomDatabase() {
     abstract fun screenTime(): ScreenTimeDao
@@ -85,7 +85,7 @@ abstract class LifeDb : RoomDatabase() {
 
         fun get(context: Context): LifeDb = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(context.applicationContext, LifeDb::class.java, "life.db")
-                .addMigrations(ADD_FIXES, ADD_PLACES, ADD_MONEY, ADD_SESSIONS, ADD_MONEY_REVIEW)
+                .addMigrations(ADD_FIXES, ADD_PLACES, ADD_MONEY, ADD_SESSIONS, ADD_MONEY_REVIEW, PLACE_IDS)
                 .build().also { instance = it }
         }
 
@@ -141,6 +141,19 @@ abstract class LifeDb : RoomDatabase() {
                         "`label` TEXT NOT NULL, `startAt` INTEGER NOT NULL, `endAt` INTEGER NOT NULL, " +
                         "PRIMARY KEY(`day`, `packageName`, `startAt`))",
                 )
+            }
+        }
+
+        /** 0.9 -> 0.10: your places get ids, so two may share a name. Every place is kept. */
+        private val PLACE_IDS = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `place_new` (`name` TEXT NOT NULL, `latitude` REAL NOT NULL, " +
+                        "`longitude` REAL NOT NULL, `radius` REAL NOT NULL, `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)",
+                )
+                db.execSQL("INSERT INTO `place_new` (`name`, `latitude`, `longitude`, `radius`) SELECT `name`, `latitude`, `longitude`, `radius` FROM `place`")
+                db.execSQL("DROP TABLE `place`")
+                db.execSQL("ALTER TABLE `place_new` RENAME TO `place`")
             }
         }
 

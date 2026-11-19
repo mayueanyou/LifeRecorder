@@ -177,11 +177,13 @@ object DayFile {
     suspend fun readPlaces(context: Context, text: String): Int {
         val a = JSONObject(text).optJSONArray("places") ?: return 0
         val dao = LifeDb.get(context).places()
-        val have = dao.places().map { it.name }.toSet()
+        val have = dao.places()
         var added = 0
         for (i in 0 until a.length()) {
             val p = a.getJSONObject(i)
-            if (p.getString("name") in have) continue
+            // Already here: the same name at the same spot.
+            if (have.any { it.name == p.getString("name") &&
+                    io.github.mayueanyou.liferecorder.engine.Geo.metres(it.latitude, it.longitude, p.getDouble("lat"), p.getDouble("lon")) < 50 }) continue
             dao.upsert(PlaceRow(p.getString("name"), p.getDouble("lat"), p.getDouble("lon"), p.getDouble("radius")))
             added++
         }
