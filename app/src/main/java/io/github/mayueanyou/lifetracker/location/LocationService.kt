@@ -46,6 +46,9 @@ class LocationService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client by lazy { LocationServices.getFusedLocationProviderClient(this) }
+    /** When Android last said it had no position, or 0 while it has one. */
+    private var unavailableSince = 0L
+
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             val locations = result.locations
@@ -55,8 +58,20 @@ class LocationService : Service() {
             }
         }
 
+        // Indoors Android flips between "a position" and "none" every few
+        // seconds; logging each flip buried everything else in the report.
+        // Only an outage that lasts is noted -- when it set in, and how long.
         override fun onLocationAvailability(availability: LocationAvailability) {
-            Diagnostics.note(this@LocationService, "recorder: location ${if (availability.isLocationAvailable) "available" else "UNAVAILABLE"}")
+            val now = System.currentTimeMillis()
+            if (!availability.isLocationAvailable) {
+                if (unavailableSince == 0L) unavailableSince = now
+                return
+            }
+            val since = unavailableSince
+            unavailableSince = 0L
+            if (since != 0L && now - since >= OUTAGE_MS) {
+                Diagnostics.note(this@LocationService, "recorder: no position for ${(now - since) / 60_000} min, then back")
+            }
         }
     }
 
@@ -133,6 +148,7 @@ class LocationService : Service() {
 
     companion object {
         private const val CHANNEL = "recording"
+        private const val OUTAGE_MS = 2 * 60 * 1000L
         private const val NOTIFICATION_ID = 1
         private const val MIN_DISTANCE_M = 10f
         // As often as every second while moving -- the 10 m minimum is what
