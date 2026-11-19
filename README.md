@@ -1,5 +1,7 @@
 # Life Tracker
 
+![Life Tracker — see where your time and your money go](store/feature-1024x500.png)
+
 *Formerly Life Recorder.*
 
 **Where does your time go? Where does your money go?**
@@ -10,6 +12,16 @@ you can see your life clearly and change what you want to change.
 [Download](https://github.com/mayueanyou/LifeTracker/releases/latest) ·
 [Privacy policy](https://mayueanyou.github.io/LifeTracker/privacy.html) ·
 [Tell me what you think](https://github.com/mayueanyou/LifeTracker/issues/new/choose)
+
+<p align="center">
+  <img src="store/screenshots/phone-1.png" width="19%" alt="Your day as a map and a timeline">
+  <img src="store/screenshots/phone-2.png" width="19%" alt="Know what every stop cost">
+  <img src="store/screenshots/phone-3.png" width="19%" alt="Parking goes to the drive">
+  <img src="store/screenshots/phone-4.png" width="19%" alt="A month of spending at a glance">
+  <img src="store/screenshots/phone-5.png" width="19%" alt="See where your phone time goes">
+</p>
+
+<sub>Screenshots show a made-up demo day, not a real person's places.</sub>
 
 ---
 
