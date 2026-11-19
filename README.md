@@ -2,7 +2,6 @@
 
 ![Life Tracker — see where your time and your money go](store/feature-1024x500.png)
 
-*Formerly Life Recorder.*
 
 **Where does your time go? Where does your money go?**
 Life Tracker is an Android app that quietly records your days — the places
@@ -95,15 +94,6 @@ Life Tracker is in testing and not on the Play Store yet.
    `https://github.com/mayueanyou/LifeTracker`.
 3. Open **Settings** in the app and go through the steps. For recording that
    never stops, set Battery to **Unrestricted**.
-
-### Moving from version 0.9 or earlier
-
-From 0.10.0 Life Tracker has a new app id (`io.github.mayueanyou.lifetracker`),
-so it installs **beside** the old app rather than over it. To bring your days
-across: update the old app to 0.9.3 and tap Settings › Google account ›
-**Back up now**; install the new app, sign in, and tap **Restore**. Once your
-days are there, turn recording off in the old app and uninstall it. In
-Obtainium, remove the old entry and add the repository again.
 
 ## Tell me what you think
 
