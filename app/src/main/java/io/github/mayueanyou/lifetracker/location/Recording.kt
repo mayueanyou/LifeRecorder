@@ -19,6 +19,7 @@ object Recording {
     private const val PREFS = "recording"
     private const val KEY_ON = "on"
     private const val KEY_LAST = "last_fix_at"
+    private const val KEY_USER_OFF = "off_by_you"
     private const val ALERTS = "alerts"
     private const val STOPPED_ID = 2
 
@@ -57,7 +58,15 @@ object Recording {
      * route is set up first so positions still arrive, and the refusal is
      * logged for the diagnostics report.
      */
+    /** Whether you turned recording off yourself; until you do, it is on whenever Android allows it. */
+    fun turnedOffByYou(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        // Turned off before this was kept: a fresh install has no choice stored at all.
+        return prefs.getBoolean(KEY_USER_OFF, false) || (prefs.contains(KEY_ON) && !prefs.getBoolean(KEY_ON, false))
+    }
+
     fun start(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_USER_OFF, false).apply()
         setWanted(context, true)
         runCatching { LocationService.startDelivery(context) }
             .onFailure { Diagnostics.note(context, "recorder: delivered route refused -- ${it.javaClass.simpleName}: ${it.message}") }
@@ -101,6 +110,7 @@ object Recording {
     }
 
     fun stop(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_USER_OFF, true).apply()
         setWanted(context, false)
         LocationService.stopDelivery(context)
         context.stopService(LocationService.intent(context))

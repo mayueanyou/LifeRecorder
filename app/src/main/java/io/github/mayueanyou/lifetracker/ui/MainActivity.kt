@@ -73,6 +73,10 @@ class MainActivity : ComponentActivity() {
         if (Recording.wanted(this) && Recording.hasForeground(this) && !LocationService.running) {
             Recording.start(this)
         }
+        // Location just allowed, and recording never turned off by you: it starts by itself.
+        if (!Recording.wanted(this) && !Recording.turnedOffByYou(this) && Recording.hasForeground(this)) {
+            Recording.start(this)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

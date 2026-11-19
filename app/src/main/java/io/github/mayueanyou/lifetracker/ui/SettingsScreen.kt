@@ -80,7 +80,8 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var checks by remember { mutableIntStateOf(0) }
-    var recording by remember { mutableStateOf(Recording.wanted(context)) }
+    // Read again on every return: granting location starts recording by itself.
+    var recording by remember(checks) { mutableStateOf(Recording.wanted(context)) }
     var lookups by remember { mutableStateOf(Lookups.allowed(context)) }
     var naming by remember { mutableStateOf(false) }
 
@@ -120,9 +121,13 @@ fun SettingsScreen() {
                     GoogleAccount.remember(context, who)
                     email = who
                     BackupWorker.schedule(context)
+                    // What Drive already holds comes back first -- your days, places and
+                    // money choices -- and only then does this phone back up.
+                    busy = "Restoring your days…"
+                    val restored = withContext(Dispatchers.IO) { Backup.restore(context, token) { busy = it } }
                     busy = "Backing up…"
-                    val n = withContext(Dispatchers.IO) { Backup.run(context, token) { busy = it } }
-                    toast("Signed in. Backed up $n day${if (n == 1) "" else "s"}.")
+                    withContext(Dispatchers.IO) { Backup.run(context, token) { busy = it } }
+                    toast(if (restored > 0) "Signed in. Your days are back from Google Drive." else "Signed in. Backing up each night.")
                 }
                 "backup" -> {
                     busy = "Backing up…"

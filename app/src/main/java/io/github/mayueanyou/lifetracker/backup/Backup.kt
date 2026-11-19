@@ -15,6 +15,7 @@ import java.time.ZoneId
 object Backup {
     private const val PREFS = "backup_files"
     private const val ROOT = "Life Tracker"
+    private const val KEY_MERGED = "drive_settings_read"
     // The app was called Life Recorder; a folder made then is found, and renamed, rather than left beside a new one.
     private const val OLD_ROOT = "Life Recorder"
 
@@ -43,6 +44,14 @@ object Backup {
                 ?: drive.folder(ROOT, null).also { prefs.edit().putString("folder:root", it).apply() }
             if (!prefs.getBoolean("root_renamed", false)) {
                 runCatching { drive.rename(root, ROOT) }.onSuccess { prefs.edit().putBoolean("root_renamed", true).apply() }
+            }
+            // A phone that has not yet read what Drive holds -- a new phone, a fresh
+            // install -- takes it in before writing anything. Writing first once
+            // replaced the money choices and named places in Drive with the empty
+            // ones of a fresh install, so a restore after it brought nothing back.
+            if (!prefs.getBoolean(KEY_MERGED, false)) {
+                mergeSettings(context, drive, root)
+                prefs.edit().putBoolean(KEY_MERGED, true).apply()
             }
 
             val days = allDays(context)
@@ -85,9 +94,8 @@ object Backup {
         val root = drive.findFolder(ROOT, null) ?: drive.findFolder(OLD_ROOT, null) ?: return 0
         var added = 0
         val top = drive.list(root)
-        // Every copy: an earlier version could leave two side by side, and reading adds only what is missing.
-        top.filter { it.name == "places.json" }.forEach { added += DayFile.readPlaces(context, drive.download(it.id)) }
-        top.filter { it.name == "settings.json" }.forEach { added += DayFile.readSettings(context, drive.download(it.id)) }
+        added += mergeSettings(context, drive, root, top)
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_MERGED, true).apply()
         val files = top.filter { it.folder && Regex("\\d{4}-\\d{2}").matches(it.name) }
             .flatMap { m -> drive.list(m.id).filter { !it.folder && it.name.endsWith(".json") } }
         files.forEachIndexed { i, f ->
@@ -97,6 +105,14 @@ object Backup {
         // The day files written next time start afresh, so nothing restored is skipped.
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("folder:root", root).apply()
         Diagnostics.note(context, "backup: restored $added record(s) from ${files.size} day(s)")
+        return added
+    }
+
+    /** Your places and money choices from Drive, added to what this phone has. Every copy: an earlier version could leave two. */
+    private suspend fun mergeSettings(context: Context, drive: Drive, root: String, top: List<Drive.Item> = drive.list(root)): Int {
+        var added = 0
+        top.filter { it.name == "places.json" }.forEach { added += DayFile.readPlaces(context, drive.download(it.id)) }
+        top.filter { it.name == "settings.json" }.forEach { added += DayFile.readSettings(context, drive.download(it.id)) }
         return added
     }
 
