@@ -40,14 +40,14 @@
     </queries>
 
     <application
-        android:name=".LifeRecorderApp"
+        android:name=".LifeTrackerApp"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LifeRecorder">
+        android:theme="@style/Theme.LifeTracker">
         <service
             android:name=".location.LocationService"
             android:exported="false"
