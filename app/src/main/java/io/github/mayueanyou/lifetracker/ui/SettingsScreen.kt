@@ -88,12 +88,14 @@ fun SettingsScreen() {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { checks++ }
     val askMany = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { checks++ }
     val askOne = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { checks++ }
-    // Each sensitive access is explained in full first; Android is asked only after "Continue".
-    var disclosing by remember { mutableStateOf<Pair<Disclosure, () -> Unit>?>(null) }
-    fun disclose(what: Disclosure, then: () -> Unit) { disclosing = what to then }
-    disclosing?.let { (what, then) ->
-        DisclosureDialog(what, onContinue = { disclosing = null; then() }, onDismiss = { disclosing = null })
+    // A recorder started before notifications were allowed has its notice hidden;
+    // starting it again once they are allowed puts "Recording your day" on show.
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        checks++
+        if (granted && Recording.wanted(context)) Recording.start(context)
     }
+    // Each sensitive access is explained in full first; Android is asked only after "Continue".
+    val disclose = rememberDisclosure()
 
     val usage = remember(checks) { UsageReader(context).hasAccess() }
     val foreground = remember(checks) { Recording.hasForeground(context) }
@@ -215,7 +217,7 @@ fun SettingsScreen() {
         item {
             Section("Permissions", "What Android asks for, one step at a time, each explained first.") {
                 Step("Usage access — for screen time", usage) {
-                    disclose(Disclosure.USAGE) { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
+                    disclose(Disclosure.USAGE) { Access.openUsage(context) }
                 }
                 Step("Location while using the app", foreground) {
                     disclose(Disclosure.LOCATION) {
@@ -228,21 +230,15 @@ fun SettingsScreen() {
                     }
                 }
                 Step("Notifications — the small \"recording\" notice", notifications) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askOne.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-                Step("Battery: Unrestricted — required; without it Android stops recording", unrestricted) {
-                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+                Step("Battery: Unrestricted — recommended; some phones stop recording without it (App info › Battery)", unrestricted) {
+                    Access.openAppInfo(context)
                 }
                 Step("Notification access — to read card purchases from your bank's notifications", reading) {
-                    disclose(Disclosure.NOTIFICATIONS) { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
+                    disclose(Disclosure.NOTIFICATIONS) { Access.openNotificationReading(context) }
                 }
-                if (!reading) {
-                    Text("If Android says it is a restricted setting: App info → ⋮ → Allow restricted settings, then try again.",
-                        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    TextButton(onClick = {
-                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-                    }) { Text("Open App info") }
-                }
+                if (!reading) RestrictedHint()
             }
         }
         item {
@@ -276,6 +272,13 @@ fun SettingsScreen() {
             Section("Money", "Purchases come only from notifications: each one goes to where you were when it arrived. " +
                 "Your bank counts by itself; any other app is asked about once. The same purchase from several apps counts once.") {
                 MoneySection(reading, checks)
+                if (!reading) {
+                    Spacer(Modifier.height(8.dp))
+                    Button(onClick = { disclose(Disclosure.NOTIFICATIONS) { Access.openNotificationReading(context) } }) {
+                        Text("Turn on")
+                    }
+                    RestrictedHint()
+                }
             }
         }
         item {
@@ -293,8 +296,8 @@ fun SettingsScreen() {
                 }
                 if (recording && !unrestricted) {
                     Spacer(Modifier.height(8.dp))
-                    Text("⚠ Battery is not Unrestricted, so Android can stop recording without warning. Allow it above.",
-                        color = MaterialTheme.colorScheme.error)
+                    Text("Battery is not Unrestricted. If recording stops by itself, allow it above.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 status.second?.let { last ->
                     val minutes = (System.currentTimeMillis() - last) / 60_000
@@ -383,6 +386,19 @@ fun SettingsScreen() {
             naming = false
         }
     }
+}
+
+/**
+ * Android holds back notification access from apps not installed from Google
+ * Play -- a "restricted setting". Only then is the way round it worth saying.
+ */
+@Composable
+fun RestrictedHint() {
+    val context = LocalContext.current
+    if (remember { Access.fromPlay(context) }) return
+    Text("If Android says it is a restricted setting: App info → ⋮ → Allow restricted settings, then try again.",
+        fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    TextButton(onClick = { Access.openAppInfo(context) }) { Text("Open App info") }
 }
 
 @Composable

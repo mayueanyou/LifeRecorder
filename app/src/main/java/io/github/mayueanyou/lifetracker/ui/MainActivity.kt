@@ -94,12 +94,21 @@ private val Accent = Color(0xFF4F46E5)
 /** Record, Screen time, and Settings -- where everything that needs setting up lives. */
 @Composable
 private fun Home() {
+    val context = LocalContext.current
     var tab by remember { mutableStateOf(0) }
+    // First open: the setup guide, until done or put off. "Recording is off" brings it back.
+    var setup by remember { mutableStateOf(Setup.shouldShow(context)) }
+    if (setup) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            SetupGuide(onDone = { setup = false; tab = 0 })
+        }
+        return
+    }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Box(Modifier.weight(1f)) {
             when (tab) {
-                0 -> RecordScreen(onOpenSettings = { tab = 2 })
-                1 -> ScreenTimeScreen(onOpenSettings = { tab = 2 })
+                0 -> RecordScreen(onOpenSettings = { if (Setup.needed(context)) setup = true else tab = 2 })
+                1 -> ScreenTimeScreen()
                 else -> SettingsScreen()
             }
         }
@@ -116,7 +125,7 @@ private fun Home() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScreenTimeScreen(onOpenSettings: () -> Unit) {
+private fun ScreenTimeScreen() {
     val context = LocalContext.current
     val store = remember { ScreenTimeStore(context) }
     var hasAccess by remember { mutableStateOf(store.hasAccess()) }
@@ -136,7 +145,7 @@ private fun ScreenTimeScreen(onOpenSettings: () -> Unit) {
     Scaffold(topBar = { TopAppBar(title = { Text("Life Tracker") }) }) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().padding(horizontal = 16.dp)) {
             if (!hasAccess) {
-                AccessCard(onOpenSettings)
+                AccessCard()
                 return@Column
             }
             DayBar(day, onDay = { day = it })
@@ -155,15 +164,21 @@ private fun ScreenTimeScreen(onOpenSettings: () -> Unit) {
     }
 }
 
+/** Screen time is asked for here, where it is used: explained, then straight to Life Tracker's switch. */
 @Composable
-private fun AccessCard(onOpenSettings: () -> Unit) {
+private fun AccessCard() {
+    val context = LocalContext.current
+    val disclose = rememberDisclosure()
     Card(Modifier.fillMaxWidth().padding(top = 24.dp)) {
         Column(Modifier.padding(20.dp)) {
             Text("See your screen time", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
-            Text("Turn on Usage access in Settings to see how long you use each app. It stays on this phone.")
+            Text("How long you use each app, each day and during each place you stayed. It stays on this phone.")
+            Spacer(Modifier.height(8.dp))
+            Text("Android opens its Usage access page at Life Tracker's switch — turn it on, then come back.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onOpenSettings) { Text("Go to Settings") }
+            Button(onClick = { disclose(Disclosure.USAGE) { Access.openUsage(context) } }) { Text("Turn on") }
         }
     }
 }

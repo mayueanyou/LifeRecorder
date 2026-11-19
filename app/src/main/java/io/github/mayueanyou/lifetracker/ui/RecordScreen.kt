@@ -197,6 +197,12 @@ private fun EmptyDay(day: LocalDate, recording: Boolean, onOpenSettings: () -> U
         Card {
             Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 when {
+                    !recording && Setup.needed(LocalContext.current) -> {
+                        Text("Recording is off", style = MaterialTheme.typography.titleMedium)
+                        Text("A few quick steps to start.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(8.dp))
+                        Button(onClick = onOpenSettings) { Text("Set up") }
+                    }
                     !recording -> {
                         Text("Recording is off", style = MaterialTheme.typography.titleMedium)
                         Text("Turn on \"Record my location\" in Settings.", color = MaterialTheme.colorScheme.onSurfaceVariant)

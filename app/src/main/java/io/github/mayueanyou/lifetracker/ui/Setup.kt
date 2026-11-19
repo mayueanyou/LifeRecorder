@@ -1,0 +1,220 @@
+package io.github.mayueanyou.lifetracker.ui
+
+import android.Manifest
+import android.app.Activity
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import io.github.mayueanyou.lifetracker.location.Recording
+import io.github.mayueanyou.lifetracker.money.NotificationReader
+
+/**
+ * Where Android's switches live. Usage access and notification access can't
+ * be asked for in a pop-up, so each opens straight at Life Tracker's own
+ * switch -- or, on a phone that can't, at the list of apps.
+ */
+object Access {
+    fun openUsage(context: Context) = open(context,
+        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:${context.packageName}")),
+        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+
+    fun openNotificationReading(context: Context) = open(context,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
+                Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                ComponentName(context, NotificationReader::class.java).flattenToString())
+        else null,
+        Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+
+    fun openAppInfo(context: Context) = open(context,
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")), null)
+
+    /**
+     * Installed from Google Play. Android holds back notification access
+     * ("restricted setting") only from apps installed some other way.
+     */
+    fun fromPlay(context: Context): Boolean = runCatching {
+        val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+            context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+        else @Suppress("DEPRECATION") context.packageManager.getInstallerPackageName(context.packageName)
+        installer == "com.android.vending"
+    }.getOrDefault(false)
+
+    private fun open(context: Context, first: Intent?, fallback: Intent?) {
+        for (intent in listOfNotNull(first, fallback)) {
+            if (runCatching { context.startActivity(intent) }.isSuccess) return
+        }
+    }
+}
+
+/** "Explain first, then ask": a [DisclosureDialog] shown on demand, with what to do after "Continue". */
+@Composable
+fun rememberDisclosure(): (Disclosure, () -> Unit) -> Unit {
+    var showing by remember { mutableStateOf<Pair<Disclosure, () -> Unit>?>(null) }
+    showing?.let { (what, then) ->
+        DisclosureDialog(what, onContinue = { showing = null; then() }, onDismiss = { showing = null })
+    }
+    return remember { { what, then -> showing = what to then } }
+}
+
+/** The way back from "Don't allow" twice, after which Android shows no pop-up at all: App info. */
+private fun refusedForGood(context: Context, permission: String) =
+    (context as? Activity)?.shouldShowRequestPermissionRationale(permission) == false
+
+object Setup {
+    private const val PREFS = "setup"
+    private const val KEY_SKIPPED = "skipped"
+
+    /** What recording needs, in the order it is asked for. */
+    fun needed(context: Context) =
+        !Recording.hasForeground(context) || !Recording.hasBackground(context) || !Recording.hasNotifications(context)
+
+    /** On first open, until it is done or put off with "Later". */
+    fun shouldShow(context: Context) = needed(context) &&
+        !context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SKIPPED, false)
+
+    fun skip(context: Context) =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_SKIPPED, true).apply()
+}
+
+/**
+ * The first open: one card at a time for what recording needs -- location,
+ * "Allow all the time", and the notice. Each is explained, then Android asks;
+ * coming back moves on to the next by itself. Screen time and money are
+ * asked for where they are used, not here.
+ */
+@Composable
+fun SetupGuide(onDone: () -> Unit) {
+    val context = LocalContext.current
+    var checks by remember { mutableIntStateOf(0) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { checks++ }
+    val disclose = rememberDisclosure()
+    // Refused twice: Android no longer shows its pop-up, so the button opens App info instead.
+    var blocked by remember { mutableStateOf(setOf<String>()) }
+
+    val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        checks++
+        if (result[Manifest.permission.ACCESS_FINE_LOCATION] != true &&
+            refusedForGood(context, Manifest.permission.ACCESS_FINE_LOCATION)) blocked += "location"
+    }
+    val askBackground = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { checks++ }
+    val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        checks++
+        // A recorder started before the notice was allowed shows it only once started again.
+        if (granted && Recording.wanted(context)) Recording.start(context)
+        if (!granted && refusedForGood(context, Manifest.permission.POST_NOTIFICATIONS)) blocked += "notifications"
+    }
+
+    val foreground = remember(checks) { Recording.hasForeground(context) }
+    val background = remember(checks) { Recording.hasBackground(context) }
+    val notifications = remember(checks) { Recording.hasNotifications(context) }
+    // Recording itself starts as soon as location is allowed (MainActivity.onResume),
+    // so a step refused later still leaves it running.
+
+    val steps = buildList {
+        add(SetupStep("location", "Your location", "So your day can be drawn as a map: where you stayed and how you got there.", foreground))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(SetupStep(
+            "background", "Allow all the time",
+            "So it keeps recording when the app is closed. Android shows its own page for this — choose \"Allow all the time\", then come back.",
+            background))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(SetupStep(
+            "notifications", "The recording notice",
+            "A small \"Recording your day\" notification, there whenever your location is recorded.",
+            notifications))
+    }
+    val current = steps.indexOfFirst { !it.done }
+
+    Column(
+        Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+            .verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("Life Tracker", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
+        Text(if (current < 0) "All set." else "Your day, recorded by itself. ${steps.size} quick steps to start — each explained first.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(4.dp))
+
+        steps.forEachIndexed { i, step ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (step.done) "✓" else "${i + 1}", fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                            color = if (step.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 12.dp))
+                        Text(step.title, style = MaterialTheme.typography.titleMedium,
+                            color = if (step.done) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                    }
+                    if (i == current) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(step.why, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.height(10.dp))
+                        val stuck = step.key in blocked
+                        if (stuck) Text("Android won't ask again here. In App info, open Permissions and allow it.",
+                            fontSize = 13.sp, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 8.dp))
+                        Button(onClick = {
+                            when {
+                                stuck -> Access.openAppInfo(context)
+                                step.key == "location" -> disclose(Disclosure.LOCATION) {
+                                    askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                                }
+                                step.key == "background" -> disclose(Disclosure.BACKGROUND_LOCATION) {
+                                    askBackground.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                                }
+                                else -> askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                        }) { Text(if (stuck) "Open App info" else "Allow") }
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(4.dp))
+        if (current < 0) {
+            Text("Recording has started. Screen time and money from your bank's notifications can be turned on " +
+                "where they show — in Screen time and when you open a stay.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onDone, Modifier.fillMaxWidth()) { Text("Show my day") }
+        } else {
+            TextButton(onClick = { Setup.skip(context); onDone() }, Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Later — I'll do it in Settings")
+            }
+        }
+    }
+}
+
+private class SetupStep(val key: String, val title: String, val why: String, val done: Boolean)

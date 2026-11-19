@@ -6,6 +6,7 @@ import io.github.mayueanyou.lifetracker.Diagnostics
 import io.github.mayueanyou.lifetracker.data.FixRow
 import io.github.mayueanyou.lifetracker.data.LifeDb
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Where every position goes, whichever way it arrived -- the recorder's own
@@ -17,7 +18,13 @@ object FixSaver {
     private val counts = HashMap<String, AtomicInteger>()
     private var hourStarted = System.currentTimeMillis()
 
-    suspend fun save(context: Context, locations: List<Location>, via: String) {
+    // One position can come by both routes at the same moment; checked and saved
+    // one at a time, it is saved once.
+    private val saving = kotlinx.coroutines.sync.Mutex()
+
+    suspend fun save(context: Context, locations: List<Location>, via: String) = saving.withLock { saveNow(context, locations, via) }
+
+    private suspend fun saveNow(context: Context, locations: List<Location>, via: String) {
         val dao = LifeDb.get(context).fixes()
         var saved = 0
         for (l in locations) {

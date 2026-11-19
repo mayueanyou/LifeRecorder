@@ -1,6 +1,8 @@
 package io.github.mayueanyou.lifetracker.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -81,6 +83,9 @@ fun CostEditor(entry: Entry, money: EntryMoney?, screen: List<AppSession>, onCha
     var amount by remember { mutableStateOf("") }
     var what by remember { mutableStateOf("") }
     val cleared = money?.cleared == true
+    val disclose = rememberDisclosure()
+    var reading by remember { mutableStateOf(MoneyApps.hasAccess(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { reading = MoneyApps.hasAccess(context) }
     val mid = (entry.start + entry.end) / 2
 
     fun change(block: suspend () -> Unit) {
@@ -231,6 +236,20 @@ fun CostEditor(entry: Entry, money: EntryMoney?, screen: List<AppSession>, onCha
                 if (cleared && charges.isEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text("Marked as no cost.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                // Money is asked for here, where it shows: until then, bank charges can't appear.
+                if (!reading && charges.isEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+                            Text("Card purchases can show here by themselves, read from your bank's notifications.",
+                                fontSize = 13.sp)
+                            TextButton(onClick = { disclose(Disclosure.NOTIFICATIONS) { Access.openNotificationReading(context) } },
+                                contentPadding = PaddingValues(0.dp)) { Text("Turn on") }
+                            RestrictedHint()
+                        }
+                    }
                 }
 
                 val items = money?.items.orEmpty()

@@ -55,12 +55,15 @@ object DayBuilder {
         val stays = result.stays.mapNotNull { s ->
             val a = max(s.start, dayStart)
             val b = min(s.end, dayEnd)
-            if (b - a < MIN_PIECE_MS) null else s.copy(start = a, end = b, live = s.live && today && b == s.end)
+            // Only a piece cut off at midnight is too short to keep; a short stay or trip
+            // that lies wholly in the day is real -- a hop across a car park, a trip just begun.
+            val cut = a != s.start || b != s.end
+            if (cut && b - a < MIN_PIECE_MS) null else s.copy(start = a, end = b, live = s.live && today && b == s.end)
         }
         val journeys = result.journeys.mapNotNull { j ->
             val a = max(j.start, dayStart)
             val b = min(j.end, dayEnd)
-            if (b - a < MIN_PIECE_MS) return@mapNotNull null
+            if ((a != j.start || b != j.end) && b - a < MIN_PIECE_MS) return@mapNotNull null
             val route = if (a == j.start && b == j.end) j.route else j.route.filter { it.time in a..b }
             val distance = if (route === j.route) j.distanceM else Geo.length(route)
             j.copy(start = a, end = b, route = route.ifEmpty { j.route }, distanceM = distance,

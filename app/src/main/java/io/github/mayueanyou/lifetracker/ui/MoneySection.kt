@@ -82,7 +82,8 @@ fun MoneySection(reading: Boolean, checks: Int) {
 
     if (s.apps.isEmpty()) {
         Text(if (reading) "No purchases read yet — they appear here after your next card payment."
-            else "Allow notification access above to start.", color = muted)
+            else "Android opens its Notification access page at Life Tracker's switch — turn it on, then come back.",
+            color = muted)
     }
 
     // Waiting for an answer: counted only after a yes.
