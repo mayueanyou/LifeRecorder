@@ -85,8 +85,9 @@ object Backup {
         val root = drive.findFolder(ROOT, null) ?: drive.findFolder(OLD_ROOT, null) ?: return 0
         var added = 0
         val top = drive.list(root)
-        top.firstOrNull { it.name == "places.json" }?.let { added += DayFile.readPlaces(context, drive.download(it.id)) }
-        top.firstOrNull { it.name == "settings.json" }?.let { added += DayFile.readSettings(context, drive.download(it.id)) }
+        // Every copy: an earlier version could leave two side by side, and reading adds only what is missing.
+        top.filter { it.name == "places.json" }.forEach { added += DayFile.readPlaces(context, drive.download(it.id)) }
+        top.filter { it.name == "settings.json" }.forEach { added += DayFile.readSettings(context, drive.download(it.id)) }
         val files = top.filter { it.folder && Regex("\\d{4}-\\d{2}").matches(it.name) }
             .flatMap { m -> drive.list(m.id).filter { !it.folder && it.name.endsWith(".json") } }
         files.forEachIndexed { i, f ->

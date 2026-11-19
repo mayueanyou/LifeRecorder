@@ -59,8 +59,31 @@ class Drive(private val token: String) {
         return out
     }
 
-    /** Writes [json] as [name] in [parent]: replacing file [id] if it is still there, otherwise a new file. */
+    /** Every file called [name] directly in [parent], newest first. */
+    fun files(name: String, parent: String): List<String> {
+        val q = "name = '${name.replace("'", "\\'")}' and '$parent' in parents and trashed = false"
+        val files = JSONObject(call("GET", "$API/files?q=${enc(q)}&fields=files(id)&orderBy=modifiedTime%20desc&spaces=drive"))
+            .getJSONArray("files")
+        return (0 until files.length()).map { files.getJSONObject(it).getString("id") }
+    }
+
+    fun delete(id: String) {
+        try { call("DELETE", "$API/files/$id") } catch (e: HttpError) { if (e.code != 404) throw e }
+    }
+
+    /**
+     * Writes [json] as [name] in [parent]: replacing file [id] if it is still
+     * there, else the file already called [name] there, else a new file. A
+     * phone that does not know the file's id -- a new phone, a reinstalled
+     * app -- once added a second copy beside the first; now it finds the
+     * first, and removes any extra copies an earlier version left.
+     */
     fun put(name: String, parent: String, json: String, id: String?): String {
+        val existing = id ?: files(name, parent).also { copies -> copies.drop(1).forEach { delete(it) } }.firstOrNull()
+        return putExact(name, parent, json, existing)
+    }
+
+    private fun putExact(name: String, parent: String, json: String, id: String?): String {
         if (id != null) {
             try {
                 return JSONObject(call("PATCH", "$UPLOAD/files/$id?uploadType=media&fields=id", json, "application/json")).getString("id")
