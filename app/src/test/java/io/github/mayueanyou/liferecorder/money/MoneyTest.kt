@@ -145,6 +145,44 @@ class MoneyTest {
         assertEquals(3, m.perEntry[0]!!.charges.single().outsideByMin)
     }
 
+    private fun walk(start: Long, end: Long) =
+        Entry.JourneyEntry(Journey(start, end, 43.1, -76.2, 43.11, -76.21, Mode.WALKING, 400.0, emptyList()))
+
+    @Test fun parkingPaidOnTheWayGoesToTheDrive() {
+        // Home until 0:30, drive to school 0:30-0:50, school from 0:50.
+        val entries = listOf(stay(0, 30 * min), drive(30 * min, 50 * min), stay(50 * min, 90 * min))
+        val m = Pricing.price(entries, listOf(pay(45 * min, 8.0, "Parking")), emptyList(), 100 * min)
+        assertEquals(8.0, m.perEntry[1]!!.total!!, 1e-9)
+        assertNull(m.perEntry[0])
+    }
+
+    @Test fun parkingPaidJustAfterGettingOutGoesToTheDrive() {
+        // Drive, then a walk from the car to the building.
+        val entries = listOf(stay(0, 30 * min), drive(30 * min, 50 * min), walk(50 * min, 58 * min), stay(58 * min, 90 * min))
+        val m = Pricing.price(entries, listOf(pay(52 * min, 8.0, "Parking")), emptyList(), 100 * min)
+        assertEquals(8.0, m.perEntry[1]!!.total!!, 1e-9)
+        // Later in the walk -- a coffee on the way in -- it is the walk's.
+        val later = Pricing.price(entries, listOf(pay(57 * min, 4.0, "Coffee")), emptyList(), 100 * min)
+        assertEquals(4.0, later.perEntry[2]!!.total!!, 1e-9)
+    }
+
+    @Test fun parkingPaidAtTheBuildingGoesToTheDrive() {
+        // Home until 12:44, drive 12:44-12:51, school from 12:51; the city's parking charge at 12:53.
+        val entries = listOf(stay(0, 44 * min), drive(44 * min, 51 * min), stay(51 * min, 120 * min))
+        val parking = pay(53 * min, 4.0, "City Of Syracuse")
+        assertEquals(4.0, Pricing.price(entries, listOf(parking), emptyList(), 130 * min).perEntry[1]!!.total!!, 1e-9)
+        // A coffee at the same moment is the school's.
+        val coffee = pay(53 * min, 4.0, "Starbucks")
+        assertEquals(4.0, Pricing.price(entries, listOf(coffee), emptyList(), 130 * min).perEntry[2]!!.total!!, 1e-9)
+    }
+
+    @Test fun chargeDuringATripStillUnderWayGoesToTheTrip() {
+        val liveDrive = Entry.JourneyEntry(Journey(30 * min, 40 * min, 43.0, -76.1, 43.1, -76.2, Mode.DRIVING, 5000.0,
+            emptyList(), live = true))
+        val m = Pricing.price(listOf(stay(0, 30 * min), liveDrive), listOf(pay(44 * min, 8.0)), emptyList(), 45 * min)
+        assertEquals(8.0, m.perEntry[1]!!.total!!, 1e-9)
+    }
+
     @Test fun chargeFarFromAnyStayIsStillCounted() {
         val entries = listOf(stay(0, 10 * min), drive(10 * min, 120 * min))
         val m = Pricing.price(entries, listOf(pay(80 * min, 4.0)), emptyList(), 130 * min)

@@ -3,6 +3,7 @@ package io.github.mayueanyou.liferecorder.money
 import io.github.mayueanyou.liferecorder.data.CostItemRow
 import io.github.mayueanyou.liferecorder.data.PaymentRow
 import io.github.mayueanyou.liferecorder.engine.Entry
+import io.github.mayueanyou.liferecorder.engine.Mode
 import kotlin.math.abs
 
 /** A bank charge as an entry shows it. [sameAsItem]: you typed it too, so it is not added twice. */
@@ -42,15 +43,17 @@ data class DayMoney(
  * - A stay's recorded end is its last position, not the moment you walked
  *   out, so a charge up to 15 minutes either side still belongs to it; the
  *   closest stay in time wins.
- * - Stays only, when there is one to give it to: a charge during a drive was
- *   almost always made at one end of it. With no stay near, it goes to the
- *   entry under way at the time, and failing that it is still counted in the
- *   day, as not placed -- money is never silently dropped.
+ * - What was going on when it was paid wins -- see [place]: a parking
+ *   ticket paid on the way belongs to the drive. A charge near no entry is
+ *   still counted in the day, as not placed -- money is never dropped.
  * - A typed item and a bank charge of the same amount are one purchase.
  * - "No cost" on an entry ignores the bank's charges for it.
  */
 object Pricing {
     private const val GRACE_MS = 15 * 60 * 1000L
+    private const val TILL_LAG_MS = 3 * 60 * 1000L
+    private const val PARKED_MS = 5 * 60 * 1000L
+    private const val TRAVEL_NEAR_MS = 10 * 60 * 1000L
 
     fun price(entries: List<Entry>, payments: List<PaymentRow>, items: List<CostItemRow>, now: Long,
               also: Map<Long, List<String>> = emptyMap()): DayMoney {
@@ -58,20 +61,8 @@ object Pricing {
         val charges = HashMap<Int, MutableList<Charge>>()
         val unplaced = ArrayList<Charge>()
         for (p in payments) {
-            var best = -1
-            var bestGap = Long.MAX_VALUE
-            entries.forEachIndexed { i, e ->
-                if (e !is Entry.StayEntry) return@forEachIndexed
-                val end = if (e.stay.live) maxOf(e.end, now) else e.end
-                val gap = when {
-                    p.time < e.start -> e.start - p.time
-                    p.time > end -> p.time - end
-                    else -> 0L
-                }
-                if (gap <= GRACE_MS && gap < bestGap) { best = i; bestGap = gap }
-            }
-            if (best < 0) best = entries.indexOfFirst { p.time in it.start..it.end }
-            val charge = Charge(p, outsideByMin = if (bestGap in 1..GRACE_MS) ((bestGap + 30_000) / 60_000).toInt() else 0,
+            val (best, gap) = place(entries, p.time, now, travel = isTravel(p))
+            val charge = Charge(p, outsideByMin = if (gap > 0) ((gap + 30_000) / 60_000).toInt() else 0,
                 alsoFrom = also[p.id].orEmpty())
             if (best < 0) unplaced += charge else charges.getOrPut(best) { ArrayList() } += charge
         }
@@ -106,6 +97,68 @@ object Pricing {
             mixed = currencies.size > 1,
         )
     }
+
+    /**
+     * Which entry a charge made at [t] belongs to, and how far outside it
+     * that was. What was going on at the time wins:
+     *
+     * - during a stay, that stay;
+     * - during a journey, that journey -- a parking ticket, a toll, a fare is
+     *   paid on the way, and once went to the stay before it, the nearest
+     *   stay in time. Two exceptions: a charge within [TILL_LAG_MS] of
+     *   leaving a stay belongs to that stay (paid at the till, notified as you
+     *   walked out); and one early in a walk straight after a drive belongs to
+     *   the drive (paying for the parking just left);
+     * - a journey still under way runs to now, so a charge just after
+     *   parking lands on the drive before the app knows you have arrived;
+     * - otherwise, the nearest stay within [GRACE_MS] -- a stay's recorded
+     *   end is its last position, not when you walked out.
+     */
+    fun place(entries: List<Entry>, t: Long, now: Long, travel: Boolean = false): Pair<Int, Long> {
+        val last = entries.lastIndex
+        fun end(i: Int): Long {
+            val e = entries[i]
+            val live = (e as? Entry.StayEntry)?.stay?.live ?: (e as Entry.JourneyEntry).journey.live
+            return if (live && i == last) maxOf(e.end, now) else e.end
+        }
+        // Parking, a toll, a fare: the drive's, if there is one near -- even
+        // paid after parking, standing at the building.
+        if (travel) {
+            entries.indices.filter { (entries[it] as? Entry.JourneyEntry)?.journey?.mode == Mode.DRIVING }
+                .map { it to (if (t < entries[it].start) entries[it].start - t else maxOf(0L, t - end(it))) }
+                .filter { it.second <= TRAVEL_NEAR_MS }
+                .minByOrNull { it.second }
+                ?.let { return it.first to 0L }
+        }
+        entries.indices.firstOrNull { entries[it] is Entry.StayEntry && t in entries[it].start..end(it) }?.let { return it to 0L }
+        entries.indices.firstOrNull { entries[it] is Entry.JourneyEntry && t in entries[it].start..end(it) }?.let { j ->
+            val before = entries.getOrNull(j - 1)
+            if (before is Entry.StayEntry && t - before.end in 0..TILL_LAG_MS) return (j - 1) to (t - before.end)
+            val walk = (entries[j] as Entry.JourneyEntry).journey
+            if (walk.mode == Mode.WALKING && before is Entry.JourneyEntry && before.journey.mode == Mode.DRIVING &&
+                kotlin.math.abs(walk.start - before.end) <= 60_000 && t - walk.start <= PARKED_MS) return (j - 1) to 0L
+            return j to 0L
+        }
+        var best = -1
+        var bestGap = Long.MAX_VALUE
+        entries.forEachIndexed { i, e ->
+            if (e !is Entry.StayEntry) return@forEachIndexed
+            val gap = if (t < e.start) e.start - t else t - end(i)
+            if (gap <= GRACE_MS && gap < bestGap) { best = i; bestGap = gap }
+        }
+        return best to (if (best < 0) 0L else bestGap)
+    }
+
+    // What you pay for getting about rather than for being somewhere. Fuel is
+    // not here: filling up is often a stop of its own, and the stay's.
+    private val TRAVEL = Regex(
+        "(?i)(?<![\\p{L}])(parking|parkmobile|park ?whiz|meter|toll|tolls|e-?z ?pass|sunpass|fastrak|i-?pass|passport ?parking|" +
+            "flowbird|spothero|paybyphone|ringgo|justpark|city of|municipal|transit|metro ?card|" +
+            "bus fare|fare|estacionamiento|parcheggio|parkhaus|parken|stationnement|p[ée]age|peaje|maut)(?![\\p{L}])",
+    )
+
+    fun isTravel(p: PaymentRow): Boolean =
+        TRAVEL.containsMatchIn(listOfNotNull(p.merchant, p.title, p.text).joinToString(" "))
 
     /** The entry an item belongs to: the one holding its moment, else the nearest. */
     fun entryAt(entries: List<Entry>, at: Long): Int {
