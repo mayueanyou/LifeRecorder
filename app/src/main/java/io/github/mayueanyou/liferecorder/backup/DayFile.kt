@@ -5,6 +5,9 @@ import io.github.mayueanyou.liferecorder.data.CostItemRow
 import io.github.mayueanyou.liferecorder.data.FixRow
 import io.github.mayueanyou.liferecorder.data.LifeDb
 import io.github.mayueanyou.liferecorder.data.PaymentRow
+import io.github.mayueanyou.liferecorder.data.MoneyRuleRow
+import io.github.mayueanyou.liferecorder.money.MoneyApps
+import io.github.mayueanyou.liferecorder.places.Lookups
 import io.github.mayueanyou.liferecorder.data.PlaceRow
 import io.github.mayueanyou.liferecorder.data.ScreenAppRow
 import io.github.mayueanyou.liferecorder.data.ScreenDayRow
@@ -34,7 +37,7 @@ object DayFile {
         val db = LifeDb.get(context)
         val (from, until) = bounds(day, zone)
         val fixes = db.fixes().countBetween(from, until)
-        val payments = db.money().payments(from, until).map { it.id }
+        val payments = db.money().payments(from, until).map { "${it.id}:${it.verdict}" }
         val items = db.money().items(from, until).map { it.id }
         val screen = db.screenTime().day(day.toString())
         if (fixes == 0 && payments.isEmpty() && items.isEmpty() && screen == null) return null
@@ -68,7 +71,9 @@ object DayFile {
         val purchases = JSONArray()
         db.money().payments(from, until).forEach { p ->
             purchases.put(JSONObject().put("t", p.time).put("app", p.app).put("package", p.pkg).put("title", p.title)
-                .put("text", p.text).put("amount", p.amount).putOpt("currency", p.currency).putOpt("merchant", p.merchant))
+                .put("text", p.text).put("amount", p.amount).putOpt("currency", p.currency).putOpt("merchant", p.merchant)
+                // Whether it read as a purchase, and your word on it -- "Not a purchase" survives a restore.
+                .put("kind", p.kind).put("verdict", p.verdict))
         }
         val items = JSONArray()
         db.money().items(from, until).forEach { c ->
@@ -127,7 +132,8 @@ object DayFile {
                     if (db.money().countSame(pkg, txt, t, 1) > 0) continue
                     db.money().insertPayment(PaymentRow(time = t, pkg = pkg, app = p.getString("app"), title = p.getString("title"),
                         text = txt, amount = p.getDouble("amount"), currency = p.optString("currency").ifEmpty { null },
-                        merchant = p.optString("merchant").ifEmpty { null }))
+                        merchant = p.optString("merchant").ifEmpty { null },
+                        kind = p.optString("kind").ifEmpty { PaymentRow.KIND_PURCHASE }, verdict = p.optInt("verdict", 0)))
                     added++
                 }
             }
@@ -163,6 +169,49 @@ object DayFile {
                 added++
             }
         }
+        return added
+    }
+
+    /**
+     * Your money decisions, so a restore -- onto a new phone, or into a newer
+     * app -- does not ask again or count again what you already settled:
+     * which apps count, the rules you made, and whether names are looked up.
+     */
+    suspend fun writeSettings(context: Context): String {
+        val rules = JSONArray()
+        LifeDb.get(context).money().rules().forEach {
+            rules.put(JSONObject().put("package", it.pkg).put("pattern", it.pattern).put("count", it.count))
+        }
+        return JSONObject().put("app", APP).put("format", FORMAT)
+            .put("money_on", JSONArray(MoneyApps.on(context).toList()))
+            .put("money_off", JSONArray(MoneyApps.off(context).toList()))
+            .put("money_asked", JSONArray(MoneyApps.asked(context).toList()))
+            .put("rules", rules)
+            .put("look_up_names", Lookups.allowed(context))
+            .toString(1)
+    }
+
+    /** Settles what this phone has not settled itself; a choice made here is never overridden. */
+    suspend fun readSettings(context: Context, text: String): Int {
+        val json = JSONObject(text)
+        if (json.optString("app") !in KNOWN_APPS) return 0
+        var added = 0
+        fun list(key: String) = json.optJSONArray(key)?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+        val on = MoneyApps.on(context); val off = MoneyApps.off(context)
+        list("money_on").filter { it !in on && it !in off }.forEach { MoneyApps.set(context, it, true); added++ }
+        list("money_off").filter { it !in on && it !in off }.forEach { MoneyApps.set(context, it, false); added++ }
+        MoneyApps.markAsked(context, list("money_asked"))
+        val dao = LifeDb.get(context).money()
+        val have = dao.rules().map { it.pkg to it.pattern }.toSet()
+        json.optJSONArray("rules")?.let { a ->
+            for (i in 0 until a.length()) {
+                val r = a.getJSONObject(i)
+                if ((r.getString("package") to r.getString("pattern")) in have) continue
+                dao.upsertRule(MoneyRuleRow(r.getString("package"), r.getString("pattern"), r.getBoolean("count")))
+                added++
+            }
+        }
+        if (json.has("look_up_names")) Lookups.setAllowed(context, json.getBoolean("look_up_names"))
         return added
     }
 

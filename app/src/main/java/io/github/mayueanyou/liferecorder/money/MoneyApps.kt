@@ -44,6 +44,12 @@ object MoneyApps {
         changed(context)
     }
 
+    fun asked(context: Context) = set(context, KEY_ASKED)
+
+    fun markAsked(context: Context, pkgs: Collection<String>) {
+        if (pkgs.isNotEmpty()) prefs(context).edit().putStringSet(KEY_ASKED, asked(context) + pkgs).apply()
+    }
+
     /** True the first time only: an app is asked about once. */
     fun firstAsk(context: Context, pkg: String): Boolean {
         val asked = set(context, KEY_ASKED)

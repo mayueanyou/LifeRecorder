@@ -16,8 +16,9 @@ android {
         applicationId = "io.github.mayueanyou.liferecorder"
         minSdk = 26
         targetSdk = 35
-        versionCode = 25
-        versionName = "0.9.2"
+        versionCode = 26
+        versionName = "0.9.3"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // The release key lives outside the repository -- by default in
@@ -82,4 +83,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    // Tests run on a phone: what only Android can check, like a backup read back exactly.
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }

@@ -9,7 +9,7 @@ import java.time.ZoneId
 
 /**
  * My Drive / Life Tracker / 2026-11 / 2026-11-17.json, one file per day,
- * plus places.json. Only a day that changed since it was last written is
+ * plus places.json and settings.json (your money decisions and rules). Only a day that changed since it was last written is
  * written again, so a nightly run after the first touches a day or two.
  */
 object Backup {
@@ -67,6 +67,8 @@ object Backup {
             }
             prefs.edit().putString("file:places",
                 drive.put("places.json", root, DayFile.writePlaces(context), prefs.getString("file:places", null))).apply()
+            prefs.edit().putString("file:settings",
+                drive.put("settings.json", root, DayFile.writeSettings(context), prefs.getString("file:settings", null))).apply()
             note(context, written, null)
             Diagnostics.note(context, "backup: wrote $written day(s) of ${days.size}")
             return written
@@ -84,6 +86,7 @@ object Backup {
         var added = 0
         val top = drive.list(root)
         top.firstOrNull { it.name == "places.json" }?.let { added += DayFile.readPlaces(context, drive.download(it.id)) }
+        top.firstOrNull { it.name == "settings.json" }?.let { added += DayFile.readSettings(context, drive.download(it.id)) }
         val files = top.filter { it.folder && Regex("\\d{4}-\\d{2}").matches(it.name) }
             .flatMap { m -> drive.list(m.id).filter { !it.folder && it.name.endsWith(".json") } }
         files.forEachIndexed { i, f ->
