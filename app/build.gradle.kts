@@ -9,15 +9,15 @@ plugins {
 
 android {
     namespace = "io.github.mayueanyou.lifetracker"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // Permanent once published: the Play Store identifies the app by it.
         applicationId = "io.github.mayueanyou.lifetracker"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 29
-        versionName = "0.10.2"
+        targetSdk = 36
+        versionCode = 30
+        versionName = "0.11.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

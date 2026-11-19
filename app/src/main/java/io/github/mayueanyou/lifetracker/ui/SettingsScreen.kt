@@ -87,6 +87,12 @@ fun SettingsScreen() {
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { checks++ }
     val askMany = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { checks++ }
     val askOne = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { checks++ }
+    // Each sensitive access is explained in full first; Android is asked only after "Continue".
+    var disclosing by remember { mutableStateOf<Pair<Disclosure, () -> Unit>?>(null) }
+    fun disclose(what: Disclosure, then: () -> Unit) { disclosing = what to then }
+    disclosing?.let { (what, then) ->
+        DisclosureDialog(what, onContinue = { disclosing = null; then() }, onDismiss = { disclosing = null })
+    }
 
     val usage = remember(checks) { UsageReader(context).hasAccess() }
     val foreground = remember(checks) { Recording.hasForeground(context) }
@@ -202,15 +208,19 @@ fun SettingsScreen() {
     ) {
         item { Text("Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 12.dp)) }
         item {
-            Section("Permissions", "What Android asks for, one step at a time. Everything stays on this phone.") {
+            Section("Permissions", "What Android asks for, one step at a time, each explained first.") {
                 Step("Usage access — for screen time", usage) {
-                    context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                    disclose(Disclosure.USAGE) { context.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) }
                 }
                 Step("Location while using the app", foreground) {
-                    askMany.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                    disclose(Disclosure.LOCATION) {
+                        askMany.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                    }
                 }
                 Step("\"Allow all the time\" — records with the app closed", background, enabled = foreground) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) askOne.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    disclose(Disclosure.BACKGROUND_LOCATION) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) askOne.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    }
                 }
                 Step("Notifications — the small \"recording\" notice", notifications) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askOne.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -219,7 +229,7 @@ fun SettingsScreen() {
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                 }
                 Step("Notification access — to read card purchases from your bank's notifications", reading) {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    disclose(Disclosure.NOTIFICATIONS) { context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) }
                 }
                 if (!reading) {
                     Text("If Android says it is a restricted setting: App info → ⋮ → Allow restricted settings, then try again.",
