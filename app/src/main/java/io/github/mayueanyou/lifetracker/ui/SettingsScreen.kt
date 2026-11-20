@@ -105,121 +105,13 @@ fun SettingsScreen() {
     val unrestricted = remember(checks) { batteryUnrestricted(context) }
     val reading = remember(checks) { MoneyApps.hasAccess(context) }
 
-    // Google account: sign in, back up, restore, sign out. Each needs a token,
-    // which may first need Google's own screen (choose an account, allow).
-    var email by remember { mutableStateOf(GoogleAccount.email(context)) }
-    var busy by remember { mutableStateOf<String?>(null) }
-    var backupVersion by remember { mutableIntStateOf(0) }
-    val backupStatus = remember(backupVersion, checks) { Backup.status(context) }
-    var pendingAction by remember { mutableStateOf<String?>(null) }
-    var pendingRetried by remember { mutableStateOf(false) }
+    // Google account: sign in, back up, restore, sign out (Google.kt).
+    val google = rememberGoogle()
+    val email = google.email
+    val busy = google.busy
+    val backupStatus = remember(google.version, checks) { Backup.status(context) }
     var confirmRestore by remember { mutableStateOf(false) }
-    val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
-
-    // Set when Drive refused the token: it is dropped and the action tried again, once.
-    var retryAction by remember { mutableStateOf<String?>(null) }
-
-    suspend fun perform(action: String, token: String, retried: Boolean = false) {
-        try {
-            when (action) {
-                "signin" -> {
-                    busy = "Signing in…"
-                    val who = withContext(Dispatchers.IO) { Drive(token).email() }
-                    GoogleAccount.remember(context, who)
-                    email = who
-                    BackupWorker.schedule(context)
-                    Diagnostics.note(context, "google sign-in: signed in")
-                    // What Drive already holds comes back first -- your days, places and
-                    // money choices -- and only then does this phone back up. Either
-                    // failing leaves you signed in: the nightly run tries again.
-                    busy = "Restoring your days…"
-                    val restored = try {
-                        withContext(Dispatchers.IO) { Backup.restore(context, token) { busy = it } }
-                    } catch (e: Exception) {
-                        if (e is Drive.HttpError && e.code == 401) throw e      // a refused token: tried again below
-                        toast("Signed in, but restoring from Drive failed: ${e.message ?: e.javaClass.simpleName}")
-                        return
-                    }
-                    busy = "Backing up…"
-                    withContext(Dispatchers.IO) { Backup.run(context, token) { busy = it } }
-                    toast(if (restored > 0) "Signed in. Your days are back from Google Drive." else "Signed in. Backing up each night.")
-                }
-                "backup" -> {
-                    busy = "Backing up…"
-                    val n = withContext(Dispatchers.IO) { Backup.run(context, token) { busy = it } }
-                    toast(if (n == 0) "Already up to date." else "Backed up $n day${if (n == 1) "" else "s"}.")
-                }
-                "restore" -> {
-                    busy = "Restoring…"
-                    val n = withContext(Dispatchers.IO) { Backup.restore(context, token) { busy = it } }
-                    toast(if (n == 0) "Nothing to restore — this phone already has it all." else "Restored $n record${if (n == 1) "" else "s"}.")
-                }
-                "signout" -> {
-                    withContext(Dispatchers.IO) { Backup.signOut(context, token) }
-                    BackupWorker.cancel(context)
-                    email = null
-                    toast("Signed out. Your files stay in your Drive.")
-                }
-            }
-        } catch (e: Exception) {
-            Diagnostics.note(context, "google $action: failed -- ${e.javaClass.simpleName}: ${e.message}")
-            if (e is Drive.HttpError && e.code == 401 && !retried) {
-                // The phone handed out a token Google no longer honours: drop it, ask again.
-                withContext(Dispatchers.IO) { GoogleAccount.drop(context, token) }
-                retryAction = action
-            } else toast("Google Drive: ${e.message ?: e.javaClass.simpleName}")
-        } finally {
-            busy = null
-            backupVersion++
-        }
-    }
-
-    val googleScreen = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        val action = pendingAction ?: return@rememberLauncherForActivityResult
-        pendingAction = null
-        // Google's screen reports its own failures in the result too, so read it either way:
-        // "cancelled" only when there is truly nothing more to say.
-        val read = runCatching { GoogleAccount.fromScreen(context, result.data) }
-        val token = read.getOrNull()
-        if (token == null) {
-            busy = null
-            // Backing out of Google's screen returns nothing at all.
-            val why = if (result.data == null) null else read.exceptionOrNull()?.let { GoogleAccount.explain(it) }
-            if (why != null) Diagnostics.note(context, "google sign-in ($action): result ${result.resultCode}, $why")
-            if (action != "signout") toast(if (why == null || result.resultCode == Activity.RESULT_CANCELED && why.startsWith("16"))
-                "Sign-in was cancelled." else "Google sign-in failed: $why")
-            else scope.launch { withContext(Dispatchers.IO) { Backup.signOut(context, null) }; BackupWorker.cancel(context); email = null }
-            return@rememberLauncherForActivityResult
-        }
-        scope.launch { perform(action, token, pendingRetried) }
-    }
-
-    fun withGoogle(action: String, retried: Boolean = false) {
-        scope.launch {
-            busy = "Connecting to Google…"
-            val answer = try {
-                withContext(Dispatchers.IO) { GoogleAccount.authorize(context) }
-            } catch (e: Exception) {
-                busy = null
-                if (action == "signout") {
-                    withContext(Dispatchers.IO) { Backup.signOut(context, null) }
-                    BackupWorker.cancel(context); email = null
-                } else {
-                    Diagnostics.note(context, "google sign-in ($action): ${GoogleAccount.explain(e)}")
-                    toast("Google sign-in failed: ${GoogleAccount.explain(e)}")
-                }
-                return@launch
-            }
-            when (answer) {
-                is GoogleAccount.Answer.Token -> perform(action, answer.token, retried)
-                is GoogleAccount.Answer.NeedsScreen -> {
-                    pendingAction = action
-                    pendingRetried = retried
-                    googleScreen.launch(IntentSenderRequest.Builder(answer.intent.intentSender).build())
-                }
-            }
-        }
-    }
+    fun withGoogle(action: String) = google.run(action)
 
     val status by produceState(Triple(0, null as Long?, null as Float?), checks) {
         while (true) {
@@ -235,10 +127,6 @@ fun SettingsScreen() {
     var placesVersion by remember { mutableIntStateOf(0) }
     val places by produceState(emptyList<PlaceRow>(), placesVersion) {
         value = withContext(Dispatchers.IO) { LifeDb.get(context).places().places() }
-    }
-
-    retryAction?.let { action ->
-        LaunchedEffect(action) { retryAction = null; withGoogle(action, retried = true) }
     }
 
     LazyColumn(

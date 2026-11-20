@@ -95,7 +95,9 @@ Life Tracker is in testing and not on the Play Store yet.
 3. Open the app and go through its six quick steps — your location,
    "Allow all the time", the recording notice, Battery **Unrestricted**,
    screen time, and your bank's notifications. Each is explained first, and
-   each opens right where Android keeps that switch.
+   each opens right where Android keeps that switch. Last, sign in with
+   Google to back up to your own Drive — or skip it and keep everything on
+   the phone.
 
 ## Tell me what you think
 

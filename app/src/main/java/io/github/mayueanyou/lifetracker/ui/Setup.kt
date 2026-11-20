@@ -171,6 +171,8 @@ fun SetupGuide(onDone: () -> Unit) {
     var blocked by remember { mutableStateOf(setOf<String>()) }
     // Back from the battery page and still not Unrestricted: say so, and offer the other way.
     var triedBattery by remember { mutableStateOf(false) }
+    val google = rememberGoogle()
+    var skippedBackup by remember { mutableStateOf(false) }
 
     val askLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         checks++
@@ -220,7 +222,8 @@ fun SetupGuide(onDone: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Life Tracker", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.SemiBold)
-        Text(if (current < 0) "All set." else "Your day, recorded by itself. ${steps.size} quick steps to start — each explained first.",
+        Text(if (current < 0 && (google.email != null || skippedBackup)) "All set."
+            else if (current < 0) "Recording has started. One last, optional step:" else "Your day, recorded by itself. ${steps.size} quick steps to start — each explained first — then a backup if you want one.",
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(4.dp))
 
@@ -264,10 +267,38 @@ fun SetupGuide(onDone: () -> Unit) {
             }
         }
 
-        if (current < 0) {
+        // Last, and the one that may be skipped: a backup in your own Google Drive.
+        // Signing in also brings back what an earlier install backed up.
+        val backupDone = google.email != null || skippedBackup
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (google.email != null) "✓" else "${steps.size + 1}", fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                        color = if (google.email != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 12.dp))
+                    Text(if (google.email != null) "Backed up to ${google.email}" else "Back up to Google Drive",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (google.email != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                }
+                if (current < 0 && !backupDone) {
+                    Spacer(Modifier.height(6.dp))
+                    Text("So your days are safe if you lose or change your phone — and come back when you install again. " +
+                        "They go to your own Google Drive as plain files, and Life Tracker can see only the files it makes there.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { google.run("signin") }, enabled = google.busy == null) { Text("Sign in with Google") }
+                    TextButton(onClick = { skippedBackup = true }, enabled = google.busy == null,
+                        contentPadding = PaddingValues(0.dp)) { Text("Not now — keep everything on this phone only") }
+                }
+                google.busy?.let { Text(it, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp)) }
+            }
+        }
+
+        if (current < 0 && backupDone) {
             Spacer(Modifier.height(4.dp))
-            Text("Recording has started.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = onDone, Modifier.fillMaxWidth()) { Text("Show my day") }
+            Text("Recording has started." + if (google.email != null) " Your days are backed up each night." else
+                " You can sign in to Google any time in Settings.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = onDone, Modifier.fillMaxWidth(), enabled = google.busy == null) { Text("Show my day") }
         }
     }
 }
