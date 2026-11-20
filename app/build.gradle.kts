@@ -16,8 +16,8 @@ android {
         applicationId = "io.github.mayueanyou.lifetracker"
         minSdk = 26
         targetSdk = 36
-        versionCode = 36
-        versionName = "0.12.2"
+        versionCode = 37
+        versionName = "0.12.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

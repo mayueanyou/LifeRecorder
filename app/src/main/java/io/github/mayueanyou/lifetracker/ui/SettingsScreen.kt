@@ -249,8 +249,12 @@ fun SettingsScreen() {
                 Step("Notifications — the small \"recording\" notice", notifications) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
-                Step("Battery: Unrestricted — recommended; some phones stop recording without it (App info › Battery)", unrestricted) {
-                    Access.openAppInfo(context)
+                Step("Battery: Unrestricted — so Android doesn't stop recording", unrestricted) {
+                    Access.openBattery(context)
+                }
+                if (!unrestricted) {
+                    BatterySteps()
+                    BatteryHelp(tried = false)
                 }
                 Step("Notification access — to read card purchases from your bank's notifications", reading) {
                     disclose(Disclosure.NOTIFICATIONS) { Access.openNotificationReading(context) }
