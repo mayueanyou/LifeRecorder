@@ -30,6 +30,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -111,10 +112,14 @@ fun SettingsScreen() {
     var backupVersion by remember { mutableIntStateOf(0) }
     val backupStatus = remember(backupVersion, checks) { Backup.status(context) }
     var pendingAction by remember { mutableStateOf<String?>(null) }
+    var pendingRetried by remember { mutableStateOf(false) }
     var confirmRestore by remember { mutableStateOf(false) }
     val toast = { text: String -> Toast.makeText(context, text, Toast.LENGTH_LONG).show() }
 
-    suspend fun perform(action: String, token: String) {
+    // Set when Drive refused the token: it is dropped and the action tried again, once.
+    var retryAction by remember { mutableStateOf<String?>(null) }
+
+    suspend fun perform(action: String, token: String, retried: Boolean = false) {
         try {
             when (action) {
                 "signin" -> {
@@ -131,6 +136,7 @@ fun SettingsScreen() {
                     val restored = try {
                         withContext(Dispatchers.IO) { Backup.restore(context, token) { busy = it } }
                     } catch (e: Exception) {
+                        if (e is Drive.HttpError && e.code == 401) throw e      // a refused token: tried again below
                         toast("Signed in, but restoring from Drive failed: ${e.message ?: e.javaClass.simpleName}")
                         return
                     }
@@ -157,7 +163,11 @@ fun SettingsScreen() {
             }
         } catch (e: Exception) {
             Diagnostics.note(context, "google $action: failed -- ${e.javaClass.simpleName}: ${e.message}")
-            toast("Google Drive: ${e.message ?: e.javaClass.simpleName}")
+            if (e is Drive.HttpError && e.code == 401 && !retried) {
+                // The phone handed out a token Google no longer honours: drop it, ask again.
+                withContext(Dispatchers.IO) { GoogleAccount.drop(context, token) }
+                retryAction = action
+            } else toast("Google Drive: ${e.message ?: e.javaClass.simpleName}")
         } finally {
             busy = null
             backupVersion++
@@ -181,10 +191,10 @@ fun SettingsScreen() {
             else scope.launch { withContext(Dispatchers.IO) { Backup.signOut(context, null) }; BackupWorker.cancel(context); email = null }
             return@rememberLauncherForActivityResult
         }
-        scope.launch { perform(action, token) }
+        scope.launch { perform(action, token, pendingRetried) }
     }
 
-    fun withGoogle(action: String) {
+    fun withGoogle(action: String, retried: Boolean = false) {
         scope.launch {
             busy = "Connecting to Google…"
             val answer = try {
@@ -201,9 +211,10 @@ fun SettingsScreen() {
                 return@launch
             }
             when (answer) {
-                is GoogleAccount.Answer.Token -> perform(action, answer.token)
+                is GoogleAccount.Answer.Token -> perform(action, answer.token, retried)
                 is GoogleAccount.Answer.NeedsScreen -> {
                     pendingAction = action
+                    pendingRetried = retried
                     googleScreen.launch(IntentSenderRequest.Builder(answer.intent.intentSender).build())
                 }
             }
@@ -224,6 +235,10 @@ fun SettingsScreen() {
     var placesVersion by remember { mutableIntStateOf(0) }
     val places by produceState(emptyList<PlaceRow>(), placesVersion) {
         value = withContext(Dispatchers.IO) { LifeDb.get(context).places().places() }
+    }
+
+    retryAction?.let { action ->
+        LaunchedEffect(action) { retryAction = null; withGoogle(action, retried = true) }
     }
 
     LazyColumn(

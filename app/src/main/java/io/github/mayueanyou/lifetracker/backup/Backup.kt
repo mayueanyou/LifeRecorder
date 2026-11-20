@@ -133,7 +133,9 @@ object Backup {
 
     /** Signing out forgets where the files are, and withdraws the app's access to them. */
     suspend fun signOut(context: Context, token: String?) {
-        token?.let { runCatching { Drive.revoke(it) } }
+        // Withdrawn at Google, and forgotten here too: a withdrawn token left in the
+        // phone's cache was handed out again at the next sign-in, and Drive refused it.
+        token?.let { runCatching { Drive.revoke(it) }; GoogleAccount.drop(context, it) }
         GoogleAccount.remember(context, null)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
     }

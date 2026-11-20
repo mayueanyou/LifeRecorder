@@ -57,8 +57,13 @@ object GoogleAccount {
         val first = ask(context)
         if (first !is Answer.Token || Drive.stillValid(first.token)) return first
         Diagnostics.note(context, "google: a withdrawn token was still cached; asking for a fresh one")
-        runCatching { GoogleAuthUtil.clearToken(context, first.token) }
+        drop(context, first.token)
         return ask(context)
+    }
+
+    /** Forgets a token on this phone, so Google's services stop handing it out. */
+    fun drop(context: Context, token: String) {
+        runCatching { GoogleAuthUtil.clearToken(context, token) }
     }
 
     private suspend fun ask(context: Context): Answer {
