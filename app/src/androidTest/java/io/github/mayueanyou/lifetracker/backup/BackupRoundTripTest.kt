@@ -8,6 +8,9 @@ import io.github.mayueanyou.lifetracker.data.LifeDb
 import io.github.mayueanyou.lifetracker.data.MoneyRuleRow
 import io.github.mayueanyou.lifetracker.data.PaymentRow
 import io.github.mayueanyou.lifetracker.data.PlaceRow
+import io.github.mayueanyou.lifetracker.data.ScreenAppRow
+import io.github.mayueanyou.lifetracker.data.ScreenDayRow
+import io.github.mayueanyou.lifetracker.data.ScreenSessionRow
 import io.github.mayueanyou.lifetracker.money.MoneyApps
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -35,6 +38,12 @@ class BackupRoundTripTest {
         val t0 = day.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() + 9 * 3600_000L
         repeat(5) { i -> db.fixes().insert(FixRow(time = t0 + i * 60_000, latitude = 47.6, longitude = -122.3, accuracy = 5f,
             altitude = null, speed = null, bearing = null, provider = "recorder")) }
+        // A position with nothing but where and when, as some phones give.
+        db.fixes().insert(FixRow(time = t0 + 10 * 60_000, latitude = 47.61, longitude = -122.31, accuracy = null,
+            altitude = null, speed = null, bearing = null, provider = null))
+        db.screenTime().replace(ScreenDayRow(day.toString(), 600_000, 3, t0 + 3600_000),
+            listOf(ScreenAppRow(day.toString(), "com.example.video", "Video", 600_000)),
+            listOf(ScreenSessionRow(day.toString(), "com.example.video", "Video", t0, t0 + 600_000)))
         db.money().insertPayment(PaymentRow(time = t0 + 60_000, pkg = "com.infonow.bofa", app = "BofA", title = "Purchase",
             text = "You spent $9.99 at CAFE", amount = 9.99, currency = "USD", merchant = "Cafe", verdict = -1))
         db.money().insertPayment(PaymentRow(time = t0 + 120_000, pkg = "com.example.wallet", app = "Wallet", title = "",
@@ -56,7 +65,9 @@ class BackupRoundTripTest {
         DayFile.readSettings(context, settings)
 
         val from = t0 - 3600_000L
-        assertEquals(5, db.fixes().countBetween(from, from + 24 * 3600_000L))
+        assertEquals(6, db.fixes().countBetween(from, from + 24 * 3600_000L))
+        assertEquals(600_000L, db.screenTime().day(day.toString())?.totalMillis)
+        assertEquals(1, db.screenTime().sessions(day.toString()).size)
         val pays = db.money().payments(from, from + 24 * 3600_000L).sortedBy { it.time }
         assertEquals(listOf(-1, 0), pays.map { it.verdict })
         assertEquals(listOf(PaymentRow.KIND_PURCHASE, PaymentRow.KIND_MAYBE), pays.map { it.kind })

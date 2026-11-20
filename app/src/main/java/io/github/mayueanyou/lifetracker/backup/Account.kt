@@ -4,12 +4,14 @@ import android.accounts.Account
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import com.google.android.gms.auth.GoogleAuthUtil
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Scope
+import io.github.mayueanyou.lifetracker.Diagnostics
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -46,7 +48,20 @@ object GoogleAccount {
         data class NeedsScreen(val intent: PendingIntent) : Answer
     }
 
+    /**
+     * The phone can keep handing out a token Google has since withdrawn --
+     * after signing out, or uninstalling and installing again -- and Drive
+     * then refuses everything. Such a token is dropped and a fresh one asked for, once.
+     */
     suspend fun authorize(context: Context): Answer {
+        val first = ask(context)
+        if (first !is Answer.Token || Drive.stillValid(first.token)) return first
+        Diagnostics.note(context, "google: a withdrawn token was still cached; asking for a fresh one")
+        runCatching { GoogleAuthUtil.clearToken(context, first.token) }
+        return ask(context)
+    }
+
+    private suspend fun ask(context: Context): Answer {
         val result = suspendCancellableCoroutine<AuthorizationResult> { cont ->
             Identity.getAuthorizationClient(context).authorize(request(context))
                 .addOnSuccessListener { cont.resume(it) }

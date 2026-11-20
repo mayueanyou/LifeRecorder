@@ -16,9 +16,9 @@ class Drive(private val token: String) {
 
     class HttpError(val code: Int, message: String) : IOException(message)
 
-    fun email(): String? =
-        runCatching { JSONObject(call("GET", "$API/about?fields=user(emailAddress)")).getJSONObject("user").getString("emailAddress") }
-            .getOrNull()
+    /** Whose Drive this is. A refusal here is the real reason sign-in failed, so it is not swallowed. */
+    fun email(): String =
+        JSONObject(call("GET", "$API/about?fields=user(emailAddress)")).getJSONObject("user").getString("emailAddress")
 
     fun findFolder(name: String, parent: String?): String? {
         val q = "name = '${name.replace("'", "\\'")}' and mimeType = '$FOLDER' and trashed = false and " +
@@ -132,6 +132,24 @@ class Drive(private val token: String) {
         private const val UPLOAD = "https://www.googleapis.com/upload/drive/v3"
         private const val FOLDER = "application/vnd.google-apps.folder"
         private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+
+        /**
+         * Whether Google still honours this token. False only when Google says
+         * no -- a token withdrawn by signing out, still handed out from the
+         * phone's cache; an unreachable network counts as yes.
+         */
+        fun stillValid(token: String): Boolean {
+            val c = URL("https://oauth2.googleapis.com/tokeninfo?access_token=${enc(token)}").openConnection() as HttpURLConnection
+            return try {
+                c.connectTimeout = 15_000
+                c.readTimeout = 15_000
+                c.responseCode !in 400..499
+            } catch (e: java.io.IOException) {
+                true
+            } finally {
+                c.disconnect()
+            }
+        }
 
         /** Withdraws the app's access altogether -- what "Disconnect" means. */
         fun revoke(token: String) {

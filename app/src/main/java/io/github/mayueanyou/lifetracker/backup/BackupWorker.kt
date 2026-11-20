@@ -32,6 +32,7 @@ class BackupWorker(context: Context, params: WorkerParameters) : CoroutineWorker
             Backup.run(context, token)
             Result.success()
         } catch (e: Exception) {
+            // Backup.run has already written the reason to Diagnostics.
             if (runAttemptCount < 3) Result.retry() else Result.success()
         }
     }

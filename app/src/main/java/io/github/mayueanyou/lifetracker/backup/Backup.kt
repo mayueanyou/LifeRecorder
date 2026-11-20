@@ -37,7 +37,7 @@ object Backup {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val drive = Drive(token)
         try {
-            if (GoogleAccount.email(context) == null) GoogleAccount.remember(context, drive.email())
+            if (GoogleAccount.email(context) == null) GoogleAccount.remember(context, runCatching { drive.email() }.getOrNull())
             val root = prefs.getString("folder:root", null)?.takeIf { exists(drive, it) }
                 ?: drive.findFolder(ROOT, null)?.also { prefs.edit().putString("folder:root", it).apply() }
                 ?: drive.findFolder(OLD_ROOT, null)?.also { prefs.edit().putString("folder:root", it).apply() }
@@ -89,7 +89,14 @@ object Backup {
     }
 
     /** Reads every day back from Drive into the phone, adding what is missing. Returns how much was added. */
-    suspend fun restore(context: Context, token: String, progress: (String) -> Unit = {}): Int {
+    suspend fun restore(context: Context, token: String, progress: (String) -> Unit = {}): Int = try {
+        restoreAll(context, token, progress)
+    } catch (e: Exception) {
+        Diagnostics.note(context, "backup: restore failed -- ${e.javaClass.simpleName}: ${e.message}")
+        throw e
+    }
+
+    private suspend fun restoreAll(context: Context, token: String, progress: (String) -> Unit): Int {
         val drive = Drive(token)
         val root = drive.findFolder(ROOT, null) ?: drive.findFolder(OLD_ROOT, null) ?: return 0
         var added = 0
@@ -98,10 +105,18 @@ object Backup {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_MERGED, true).apply()
         val files = top.filter { it.folder && Regex("\\d{4}-\\d{2}").matches(it.name) }
             .flatMap { m -> drive.list(m.id).filter { !it.folder && it.name.endsWith(".json") } }
+        // One file that can't be read -- edited by hand, cut short -- is skipped, not the end of the restore.
+        var skipped = 0
         files.forEachIndexed { i, f ->
             progress("Restoring ${i + 1} of ${files.size}")
-            added += DayFile.read(context, drive.download(f.id))
+            try {
+                added += DayFile.read(context, drive.download(f.id))
+            } catch (e: org.json.JSONException) {
+                skipped++
+                Diagnostics.note(context, "backup: skipped ${f.name} -- ${e.message}")
+            }
         }
+        if (skipped > 0) Diagnostics.note(context, "backup: $skipped file(s) could not be read")
         // The day files written next time start afresh, so nothing restored is skipped.
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("folder:root", root).apply()
         Diagnostics.note(context, "backup: restored $added record(s) from ${files.size} day(s)")

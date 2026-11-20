@@ -123,10 +123,17 @@ fun SettingsScreen() {
                     GoogleAccount.remember(context, who)
                     email = who
                     BackupWorker.schedule(context)
+                    Diagnostics.note(context, "google sign-in: signed in")
                     // What Drive already holds comes back first -- your days, places and
-                    // money choices -- and only then does this phone back up.
+                    // money choices -- and only then does this phone back up. Either
+                    // failing leaves you signed in: the nightly run tries again.
                     busy = "Restoring your days…"
-                    val restored = withContext(Dispatchers.IO) { Backup.restore(context, token) { busy = it } }
+                    val restored = try {
+                        withContext(Dispatchers.IO) { Backup.restore(context, token) { busy = it } }
+                    } catch (e: Exception) {
+                        toast("Signed in, but restoring from Drive failed: ${e.message ?: e.javaClass.simpleName}")
+                        return
+                    }
                     busy = "Backing up…"
                     withContext(Dispatchers.IO) { Backup.run(context, token) { busy = it } }
                     toast(if (restored > 0) "Signed in. Your days are back from Google Drive." else "Signed in. Backing up each night.")
@@ -149,6 +156,7 @@ fun SettingsScreen() {
                 }
             }
         } catch (e: Exception) {
+            Diagnostics.note(context, "google $action: failed -- ${e.javaClass.simpleName}: ${e.message}")
             toast("Google Drive: ${e.message ?: e.javaClass.simpleName}")
         } finally {
             busy = null
