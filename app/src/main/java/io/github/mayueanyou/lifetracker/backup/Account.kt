@@ -7,6 +7,8 @@ import android.content.Intent
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
+import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.android.gms.common.api.Scope
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -59,6 +61,22 @@ object GoogleAccount {
     fun fromScreen(context: Context, data: Intent?): String =
         Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data).accessToken
             ?: error("Google gave no access token")
+
+    /**
+     * What went wrong, in words someone can act on. Code 10 (developer error)
+     * is almost always this install's signing key missing from the app's
+     * Google Cloud OAuth clients -- e.g. a Play install, signed by Google's key.
+     */
+    fun explain(e: Throwable): String = when (e) {
+        is ApiException -> when (e.statusCode) {
+            CommonStatusCodes.DEVELOPER_ERROR -> "10 — this copy of the app isn't registered with Google yet (signing key). Please report it."
+            CommonStatusCodes.NETWORK_ERROR -> "7 — no connection to Google. Try again online."
+            CommonStatusCodes.CANCELED -> "16 — cancelled"
+            else -> "${e.statusCode} — ${CommonStatusCodes.getStatusCodeString(e.statusCode)}" +
+                (e.message?.takeIf { it.isNotBlank() }?.let { ": $it" } ?: "")
+        }
+        else -> e.message ?: e.javaClass.simpleName
+    }
 
     /** A token without showing anything -- for the nightly backup. Null when Google needs you first. */
     suspend fun silentToken(context: Context): String? =

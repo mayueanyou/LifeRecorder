@@ -96,8 +96,9 @@ private val Accent = Color(0xFF4F46E5)
 private fun Home() {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(0) }
-    // First open: the setup guide, until done or put off. "Recording is off" brings it back.
-    var setup by remember { mutableStateOf(Setup.shouldShow(context)) }
+    // The setup guide, until everything the app needs is allowed -- and again if any of it is taken away.
+    var setup by remember { mutableStateOf(Setup.needed(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { if (Setup.needed(context)) setup = true }
     if (setup) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
             SetupGuide(onDone = { setup = false; tab = 0 })

@@ -92,11 +92,10 @@ Life Tracker is in testing and not on the Play Store yet.
 2. To get updates automatically, add this repository to
    [Obtainium](https://github.com/ImranR98/Obtainium):
    `https://github.com/mayueanyou/LifeTracker`.
-3. Open the app: three quick steps start recording — your location,
-   "Allow all the time", and the recording notice. Screen time and money from
-   your bank's notifications are turned on where they show, whenever you want
-   them. If recording ever stops by itself, set Battery to **Unrestricted**
-   (Settings › Permissions).
+3. Open the app and go through its six quick steps — your location,
+   "Allow all the time", the recording notice, Battery **Unrestricted**,
+   screen time, and your bank's notifications. Each is explained first, and
+   each opens right where Android keeps that switch.
 
 ## Tell me what you think
 

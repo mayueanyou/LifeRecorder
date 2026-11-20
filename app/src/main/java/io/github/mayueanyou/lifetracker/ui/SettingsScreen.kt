@@ -159,11 +159,17 @@ fun SettingsScreen() {
     val googleScreen = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         val action = pendingAction ?: return@rememberLauncherForActivityResult
         pendingAction = null
-        val token = if (result.resultCode == Activity.RESULT_OK)
-            runCatching { GoogleAccount.fromScreen(context, result.data) }.getOrNull() else null
+        // Google's screen reports its own failures in the result too, so read it either way:
+        // "cancelled" only when there is truly nothing more to say.
+        val read = runCatching { GoogleAccount.fromScreen(context, result.data) }
+        val token = read.getOrNull()
         if (token == null) {
             busy = null
-            if (action != "signout") toast("Sign-in was cancelled.")
+            // Backing out of Google's screen returns nothing at all.
+            val why = if (result.data == null) null else read.exceptionOrNull()?.let { GoogleAccount.explain(it) }
+            if (why != null) Diagnostics.note(context, "google sign-in ($action): result ${result.resultCode}, $why")
+            if (action != "signout") toast(if (why == null || result.resultCode == Activity.RESULT_CANCELED && why.startsWith("16"))
+                "Sign-in was cancelled." else "Google sign-in failed: $why")
             else scope.launch { withContext(Dispatchers.IO) { Backup.signOut(context, null) }; BackupWorker.cancel(context); email = null }
             return@rememberLauncherForActivityResult
         }
@@ -180,7 +186,10 @@ fun SettingsScreen() {
                 if (action == "signout") {
                     withContext(Dispatchers.IO) { Backup.signOut(context, null) }
                     BackupWorker.cancel(context); email = null
-                } else toast("Could not reach Google: ${e.message ?: e.javaClass.simpleName}")
+                } else {
+                    Diagnostics.note(context, "google sign-in ($action): ${GoogleAccount.explain(e)}")
+                    toast("Google sign-in failed: ${GoogleAccount.explain(e)}")
+                }
                 return@launch
             }
             when (answer) {

@@ -26,7 +26,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -42,7 +41,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import io.github.mayueanyou.lifetracker.location.Recording
+import io.github.mayueanyou.lifetracker.money.MoneyApps
 import io.github.mayueanyou.lifetracker.money.NotificationReader
+import io.github.mayueanyou.lifetracker.screentime.UsageReader
 
 /**
  * Where Android's switches live. Usage access and notification access can't
@@ -98,26 +99,18 @@ private fun refusedForGood(context: Context, permission: String) =
     (context as? Activity)?.shouldShowRequestPermissionRationale(permission) == false
 
 object Setup {
-    private const val PREFS = "setup"
-    private const val KEY_SKIPPED = "skipped"
-
-    /** What recording needs, in the order it is asked for. */
+    /** Everything the app needs, in the order it is asked for. Any of it missing brings the guide back. */
     fun needed(context: Context) =
-        !Recording.hasForeground(context) || !Recording.hasBackground(context) || !Recording.hasNotifications(context)
-
-    /** On first open, until it is done or put off with "Later". */
-    fun shouldShow(context: Context) = needed(context) &&
-        !context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_SKIPPED, false)
-
-    fun skip(context: Context) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_SKIPPED, true).apply()
+        !Recording.hasForeground(context) || !Recording.hasBackground(context) || !Recording.hasNotifications(context) ||
+            !Recording.batteryUnrestricted(context) || !UsageReader(context).hasAccess() || !MoneyApps.hasAccess(context)
 }
 
 /**
- * The first open: one card at a time for what recording needs -- location,
- * "Allow all the time", and the notice. Each is explained, then Android asks;
- * coming back moves on to the next by itself. Screen time and money are
- * asked for where they are used, not here.
+ * The first open: one card at a time for everything the app needs -- location,
+ * "Allow all the time", the notice, battery, screen time and notifications.
+ * Each is explained, then Android asks or opens its page at Life Tracker's
+ * switch; coming back moves on to the next by itself. The app opens only
+ * once all are done.
  */
 @Composable
 fun SetupGuide(onDone: () -> Unit) {
@@ -133,7 +126,11 @@ fun SetupGuide(onDone: () -> Unit) {
         if (result[Manifest.permission.ACCESS_FINE_LOCATION] != true &&
             refusedForGood(context, Manifest.permission.ACCESS_FINE_LOCATION)) blocked += "location"
     }
-    val askBackground = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { checks++ }
+    val askBackground = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        checks++
+        if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            refusedForGood(context, Manifest.permission.ACCESS_BACKGROUND_LOCATION)) blocked += "background"
+    }
     val askNotify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         checks++
         // A recorder started before the notice was allowed shows it only once started again.
@@ -141,22 +138,28 @@ fun SetupGuide(onDone: () -> Unit) {
         if (!granted && refusedForGood(context, Manifest.permission.POST_NOTIFICATIONS)) blocked += "notifications"
     }
 
-    val foreground = remember(checks) { Recording.hasForeground(context) }
-    val background = remember(checks) { Recording.hasBackground(context) }
-    val notifications = remember(checks) { Recording.hasNotifications(context) }
-    // Recording itself starts as soon as location is allowed (MainActivity.onResume),
-    // so a step refused later still leaves it running.
-
-    val steps = buildList {
-        add(SetupStep("location", "Your location", "So your day can be drawn as a map: where you stayed and how you got there.", foreground))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(SetupStep(
-            "background", "Allow all the time",
-            "So it keeps recording when the app is closed. Android shows its own page for this — choose \"Allow all the time\", then come back.",
-            background))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(SetupStep(
-            "notifications", "The recording notice",
-            "A small \"Recording your day\" notification, there whenever your location is recorded.",
-            notifications))
+    // Recording itself starts as soon as location is allowed (MainActivity.onResume).
+    val steps = remember(checks) {
+        buildList {
+            add(SetupStep("location", "Your location",
+                "So your day can be drawn as a map: where you stayed and how you got there.",
+                Recording.hasForeground(context)))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) add(SetupStep("background", "Allow all the time",
+                "So it keeps recording when the app is closed. Android shows its own page for this — choose \"Allow all the time\", then come back.",
+                Recording.hasBackground(context)))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(SetupStep("notifications", "The recording notice",
+                "A small \"Recording your day\" notification, there whenever your location is recorded.",
+                Recording.hasNotifications(context)))
+            add(SetupStep("battery", "Battery: Unrestricted",
+                "So Android doesn't stop recording to save battery. In App info: App battery usage › Allow background usage › Unrestricted (on some phones: Battery › Unrestricted), then come back.",
+                Recording.batteryUnrestricted(context)))
+            add(SetupStep("usage", "Screen time",
+                "So each day shows how long you used each app, and what was on screen during each place you stayed. Android opens its Usage access page — turn on Life Tracker, then come back.",
+                UsageReader(context).hasAccess()))
+            add(SetupStep("reading", "Money from your bank's notifications",
+                "So card purchases appear by themselves, at the place you paid. Android opens its Notification access page — turn on Life Tracker, then come back.",
+                MoneyApps.hasAccess(context)))
+        }
     }
     val current = steps.indexOfFirst { !it.done }
 
@@ -196,23 +199,22 @@ fun SetupGuide(onDone: () -> Unit) {
                                 step.key == "background" -> disclose(Disclosure.BACKGROUND_LOCATION) {
                                     askBackground.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                                 }
-                                else -> askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                step.key == "notifications" -> askNotify.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                step.key == "battery" -> Access.openAppInfo(context)
+                                step.key == "usage" -> disclose(Disclosure.USAGE) { Access.openUsage(context) }
+                                else -> disclose(Disclosure.NOTIFICATIONS) { Access.openNotificationReading(context) }
                             }
-                        }) { Text(if (stuck) "Open App info" else "Allow") }
+                        }) { Text(if (stuck || step.key == "battery") "Open App info" else "Allow") }
+                        if (step.key == "reading") RestrictedHint()
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(4.dp))
         if (current < 0) {
-            Text("Recording has started. Screen time and money from your bank's notifications can be turned on " +
-                "where they show — in Screen time and when you open a stay.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            Text("Recording has started.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             Button(onClick = onDone, Modifier.fillMaxWidth()) { Text("Show my day") }
-        } else {
-            TextButton(onClick = { Setup.skip(context); onDone() }, Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Later — I'll do it in Settings")
-            }
         }
     }
 }
